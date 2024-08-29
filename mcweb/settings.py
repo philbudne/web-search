@@ -311,7 +311,7 @@ LOGGING = {
     },
     'root': {
         'handlers': ['console'],
-        'level': 'DEBUG',
+        'level': env('ROOT_LOGGER_LEVEL', default='DEBUG'),
     },
 }
 
