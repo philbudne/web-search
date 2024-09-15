@@ -7,6 +7,7 @@ adapted from https://james.lin.net.nz/2011/09/08/python-decorator-caching-your-f
 
 # Python
 import hashlib
+import logging
 from typing import Callable, Any
 
 # PyPI
@@ -14,6 +15,8 @@ from django.core.cache import cache
 
 # mcweb
 from settings import CACHE_SECONDS
+
+logger = logging.getLogger(__name__)
 
 def cached_function_call(fn: Callable, cache_prefix: str, seconds: int | None = None, *args, **kwargs) -> tuple[Any, bool]:
     """
@@ -28,18 +31,23 @@ def cached_function_call(fn: Callable, cache_prefix: str, seconds: int | None = 
         elements.append(str(arg))
     for key, val in kwargs.items():
         elements.append(f"{key}\x02{val}")
-    key = hashlib.md5("\x01".join(elements).encode("UTF8")).hexdigest()
+    readable_key = "\x01".join(elements)
+    key = hashlib.md5(readable_key.encode("UTF8")).hexdigest()
 
     results = cache.get(key)
     if results:
         # increment counter?
+        logger.debug("found %s", readable_key)
         return results, True
+
+    logger.debug("not found %s", readable_key)
     results = fn(*args, **kwargs)
     if seconds is None:
         # this is the one place where the default value is used.
         # NOTE! used here to allow wacking CACHE_SECONDS in debugger!
         seconds = CACHE_SECONDS
     cache.set(key, results, seconds)
+    logger.debug("set %s", readable_key)
     return results, False
 
 def mc_providers_cacher(fn: Callable, cache_prefix: str, *args, **kwargs) -> tuple[Any, bool]:
