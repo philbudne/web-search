@@ -66,6 +66,7 @@ env = environ.Env(      # @@CONFIGURATION@@ definitions
     ALLOWED_HOSTS=(list, _DEFAULT_ALLOWED_HOSTS),
     ANALYTICS_MATOMO_DOMAIN=(str, "null"),
     ANALYTICS_MATOMO_SITE_ID=(str, "null"),
+    CACHE_SECONDS=(int, 24*60*60),
     CSRF_TRUSTED_ORIGINS=(list, _DEFAULT_CSRF_TRUSTED_ORIGINS),
     DEBUG=(bool, False),
     EMAIL_BACKEND=(str, 'django.core.mail.backends.smtp.EmailBackend'),
@@ -103,6 +104,7 @@ ALLOWED_HOSTS = env("ALLOWED_HOSTS") # list
 ANALYTICS_MATOMO_DOMAIN = env('ANALYTICS_MATOMO_DOMAIN')
 ANALYTICS_MATOMO_SITE_ID = env('ANALYTICS_MATOMO_SITE_ID')
 
+CACHE_SECONDS = env("CACHE_SECONDS")
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS") # defined as list
 
 DEBUG = env("DEBUG")

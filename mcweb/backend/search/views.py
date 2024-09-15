@@ -5,32 +5,39 @@ import time
 import collections
 import requests
 from typing import Optional
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-from django.http import HttpResponseBadRequest, HttpResponseForbidden, HttpResponse
-from rest_framework.authentication import SessionAuthentication, TokenAuthentication
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.decorators import api_view
-from django.views.decorators.http import require_http_methods
+
+# PyPi
+import mc_providers
 from django.contrib.auth.decorators import login_required
-from rest_framework.decorators import action, authentication_classes, permission_classes
-import backend.util.csv_stream as csv_stream
-from .utils import parse_query, parsed_query_from_dict, ParsedQuery
-from util.cache import cache_by_kwargs
-from .tasks import download_all_large_content_csv, download_all_queries_csv_task
-from ..users.models import QuotaHistory
-from util.csvwriter import CSVWriterHelper
-from backend.users.exceptions import OverQuotaException
-import mc_providers as providers
+from django.http import HttpResponseBadRequest, HttpResponseForbidden, HttpResponse
+from django.views.decorators.http import require_http_methods
 from mc_providers.exceptions import UnsupportedOperationException, QueryingEverythingUnsupportedQuery
 from mc_providers.exceptions import ProviderException
-from mc_providers.cache import CachingManager
+from requests.adapters import HTTPAdapter
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication
+from rest_framework.decorators import api_view, action, authentication_classes, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from urllib3.util.retry import Retry
 
-from util.cache import django_caching_interface
+# mcweb/util
+from util.cache import cache_by_kwargs, mc_providers_cacher
+from util.csvwriter import CSVWriterHelper
+
+# mcweb/backend/search (local dir)
+from .utils import parse_query, parsed_query_from_dict, pq_provider, ParsedQuery
+from .tasks import download_all_large_content_csv, download_all_queries_csv_task
+
+# mcweb/backend/users
+from ..users.models import QuotaHistory
+from backend.users.exceptions import OverQuotaException
+
+# mcweb/backend/util
+import backend.util.csv_stream as csv_stream
+
 logger = logging.getLogger(__name__)
 
-# This is where we set the caching manager and the cache_time
-CachingManager.cache_function = django_caching_interface(time_secs=60*60*24)
+# enable caching for mc_providers results (explicitly referencing pkg for clarity)
+mc_providers.cache.CachingManager.cache_function = mc_providers_cacher
 
 session = requests.Session()
 retry = Retry(connect=3, backoff_factor=0.5)
@@ -49,6 +56,8 @@ def error_response(msg: str, response_type: Optional[HttpResponse]) -> HttpRespo
 
 def handle_provider_errors(func):
     """
+    Decorator for view functions.
+
     If a provider-related method returns a JSON error we want to send it back to the client with information
     that can be used to show the user some kind of error.
     """
@@ -71,7 +80,7 @@ def handle_provider_errors(func):
 @permission_classes([IsAuthenticated])
 def total_count(request):
     pq = parse_query(request)
-    provider = providers.provider_by_name(pq.provider_name, pq.api_key, pq.base_url, pq.caching)
+    provider = pq_provider(pq)
     relevant_count = provider.count(f"({query_str})", pq.start_date, pq.end_date, **pq.provider_props)
     try:
         total_content_count = provider.count(provider.everything_query(), pq.start_date, pq.end_date, **pq.provider_props)
@@ -90,7 +99,7 @@ def total_count(request):
 # @cache_by_kwargs()
 def count_over_time(request):
     pq = parse_query(request)
-    provider = providers.provider_by_name(pq.provider_name, pq.api_key, pq.base_url, pq.caching)
+    provider = pq_provider(pq)
     try:
         results = provider.normalized_count_over_time(f"({query_str})", pq.start_date, pq.end_date, **pq.provider_props)
     except UnsupportedOperationException:
@@ -109,7 +118,7 @@ def count_over_time(request):
 # @cache_by_kwargs()
 def sample(request):
     pq = parse_query(request)
-    provider = providers.provider_by_name(pq.provider_name, pq.api_key, pq.base_url, pq.caching)
+    provider = pq_provider(pq)
     try:
         response = provider.sample(f"({query_str})", pq.start_date, pq.end_date, **pq.provider_props)
     except requests.exceptions.ConnectionError:
@@ -127,8 +136,9 @@ def story_detail(request):
     pq = parse_query(request)
     story_id = request.GET.get("storyId")
     platform = request.GET.get("platform")
-    provider = providers.provider_by_name(platform, pq.api_key, pq.base_url, pq.caching)
+    provider = pq_provider(pq, platform)
     story_details = provider.item(story_id)
+    # PB: uses "platform" to create provider, but pq.provider_name for QuotaHistory??
     QuotaHistory.increment(request.user.id, request.user.is_staff, pq.provider_name)
     return HttpResponse(json.dumps({"story": story_details}, default=str), content_type="application/json",
                         status=200)
@@ -140,7 +150,7 @@ def story_detail(request):
 # @cache_by_kwargs()
 def sources(request):
     pq = parse_query(request)
-    provider = providers.provider_by_name(pq.provider_name, pq.api_key, pq.base_url, pq.caching)
+    provider = pq_provider(pq)
     try:
         response = provider.sources(f"({query_str})", pq.start_date, pq.end_date, 10, **pq.provider_props)
     except requests.exceptions.ConnectionError:
@@ -154,7 +164,7 @@ def sources(request):
 def download_sources_csv(request):
     query = json.loads(request.GET.get("qS"))
     pq = parsed_query_from_dict(query[0])
-    provider = providers.provider_by_name(pq.provider_name, pq.api_key, pq.base_url, pq.caching)
+    provider = pq_provider(pq)
     try:
         data = provider.sources(f"({query_str})", pq.start_date,
                     pq.end_date, **pq.provider_props, sample_size=5000, limit=100)
@@ -181,7 +191,7 @@ def download_sources_csv(request):
 # @cache_by_kwargs()
 def languages(request):
     pq = parse_query(request)
-    provider = providers.provider_by_name(pq.provider_name, pq.api_key, pq.base_url, pq.caching)
+    provider = pq_provider(pq)
     try:
         response = provider.languages(f"({query_str})", pq.start_date, pq.end_date, **pq.provider_props)
     except requests.exceptions.ConnectionError:
@@ -196,7 +206,7 @@ def languages(request):
 def download_languages_csv(request):
     query = json.loads(request.GET.get("qS"))
     pq = parsed_query_from_dict(query[0])
-    provider = providers.provider_by_name(pq.provider_name, pq.api_key, pq.base_url, pq.caching)
+    provider = pq_provider(pq)
     try:
         data = provider.languages(f"({query_str})", pq.start_date,
                     pq.end_date, **pq.provider_props, sample_size=5000, limit=100)
@@ -221,7 +231,7 @@ def download_languages_csv(request):
 @permission_classes([IsAuthenticated])
 def story_list(request):
     pq = parse_query(request)
-    provider = providers.provider_by_name(pq.provider_name, pq.api_key, pq.base_url, pq.caching)
+    provider = pq_provider(pq)
     # support returning text content for staff only
     if pq.provider_props.get('expanded') is not None:
         pq.provider_props['expanded'] = pq.provider_props['expanded'] == '1'
@@ -241,7 +251,7 @@ def story_list(request):
 # @cache_by_kwargs()
 def words(request):
     pq = parse_query(request)
-    provider = providers.provider_by_name(pq.provider_name, pq.api_key, pq.base_url, pq.caching)
+    provider = pq_provider(pq)
     try:
         words = provider.words(f"({query_str})", pq.start_date, pq.end_date, **pq.provider_props)
     except requests.exceptions.ConnectionError:
@@ -258,7 +268,7 @@ def words(request):
 def download_words_csv(request):
     query = json.loads(request.GET.get("qS"))
     pq = parsed_query_from_dict(query[0])
-    provider = providers.provider_by_name(pq.provider_name, pq.api_key, pq.base_url, pq.caching)
+    provider = pq_provider(pq)
     try:
         words = provider.words(f"({query_str})", pq.start_date,
                                 pq.end_date, **pq.provider_props, sample_size=5000)
@@ -283,7 +293,7 @@ def download_words_csv(request):
 def download_counts_over_time_csv(request):
     query = json.loads(request.GET.get("qS"))
     pq = parsed_query_from_dict(query[0])
-    provider = providers.provider_by_name(pq.provider_name, pq.api_key, pq.base_url, pq.caching)
+    provider = pq_provider(pq)
     try:
         data = provider.normalized_count_over_time(
             f"({query_str})", pq.start_date, pq.end_date, **pq.provider_props)
@@ -313,7 +323,7 @@ def download_all_content_csv(request):
     data = []
     for query in queryState:
         pq = parsed_query_from_dict(query)
-        provider = providers.provider_by_name(pq.provider_name, pq.api_key, pq.base_url, pq.caching)
+        provider = pq_provider(pq)
         data.append(provider.all_items(
             f"({query_str})", pq.start_date, pq.end_date, **pq.provider_props))
 
@@ -349,7 +359,7 @@ def send_email_large_download_csv(request):
     # follows similiar logic from download_all_content_csv, get information and send to tasks
     for query in queryState:
         pq = parsed_query_from_dict(query)
-        provider = providers.provider_by_name(pq.provider_name, pq.api_key, pq.base_url, pq.caching)
+        provider = pq_provider(pq)
         try:
             count = provider.count(f"({query_str})", pq.start_date, pq.end_date, **pq.provider_props)
             if count >= 25000 and count <= 200000:
