@@ -1,11 +1,26 @@
 import datetime as dt
 import json
-from typing import List, Dict
+from typing import List, Dict, NamedTuple
 from django.apps import apps
 from mc_providers import provider_name, PLATFORM_TWITTER, PLATFORM_SOURCE_TWITTER, PLATFORM_YOUTUBE,\
     PLATFORM_SOURCE_YOUTUBE, PLATFORM_REDDIT, PLATFORM_SOURCE_PUSHSHIFT, PLATFORM_SOURCE_MEDIA_CLOUD,\
     PLATFORM_SOURCE_WAYBACK_MACHINE, PLATFORM_ONLINE_NEWS
 from settings import NEWS_SEARCH_API_URL
+
+
+class ParsedQuery(NamedTuple):
+    start_date: dt.datetime
+    end_date: dt.datetime
+    query_str: str
+    provider_props: dict
+    provider_name: str
+    api_key: str | None
+    base_url: str | None
+    caching: bool = True
+
+_BASE_URL = {
+    'onlinenews-mediacloud': NEWS_SEARCH_API_URL,
+}
 
 
 def fill_in_dates(start_date, end_date, existing_counts):
@@ -28,68 +43,67 @@ def fill_in_dates(start_date, end_date, existing_counts):
     return filled_counts
 
 
-def parse_query(request) -> tuple:
+def parse_query(request) -> ParsedQuery:
     http_method = request.method
 
     if http_method == 'POST':
         payload = json.loads(request.body).get("queryObject")
-        provider_name = payload["platform"]
-        query_str = payload["query"]
-        collections = payload["collections"]
-        sources = payload["sources"]
-        provider_props = search_props_for_provider(provider_name, collections, sources, payload)
-        start_date = payload["startDate"]
-        start_date = dt.datetime.strptime(start_date, '%m/%d/%Y')
-        end_date = payload["endDate"]
-        end_date = dt.datetime.strptime(end_date, '%m/%d/%Y')
-        api_key = _get_api_key(provider_name)
-        base_url = NEWS_SEARCH_API_URL if provider_name == 'onlinenews-mediacloud' else None
-    elif http_method == 'GET':
-        provider_name = request.GET.get("p", 'onlinenews-mediacloud')
-        query_str = request.GET.get("q", "*")
-        collections = request.GET.get("cs", None)
-        collections = collections.split(",") if collections is not None else []
-        sources = request.GET.get("ss", None)
-        sources = sources.split(",") if sources is not None else []
-        provider_props = search_props_for_provider(
-            provider_name, 
-            collections,
-            sources, 
-            request.GET
-        )
-        start_date = request.GET.get("start", "2010-01-01")
-        start_date = dt.datetime.strptime(start_date, '%Y-%m-%d')
-        end_date = request.GET.get("end", "2030-01-01")
-        end_date = dt.datetime.strptime(end_date, '%Y-%m-%d')
-        api_key = _get_api_key(provider_name)
-        base_url = NEWS_SEARCH_API_URL if provider_name == 'onlinenews-mediacloud' else None 
-    return start_date, end_date, query_str, provider_props, provider_name, api_key, base_url
+        return parsed_query_from_dict(payload)
+
+    provider_name = request.GET.get("p", 'onlinenews-mediacloud')
+    query_str = request.GET.get("q", "*")
+    collections_str = request.GET.get("cs", None)
+    collections = collections_str.split(",") if collections_str is not None else []
+    sources_str = request.GET.get("ss", None)
+    sources = sources_str.split(",") if sources_str is not None else []
+    provider_props = search_props_for_provider(
+        provider_name, 
+        collections,
+        sources, 
+        request.GET
+    )
+    start_date_str = request.GET.get("start", "2010-01-01")
+    start_date = dt.datetime.strptime(start_date_str, '%Y-%m-%d')
+    end_date_str = request.GET.get("end", "2030-01-01")
+    end_date = dt.datetime.strptime(end_date_str, '%Y-%m-%d')
+    api_key = _get_api_key(provider_name)
+    base_url = _BASE_URL.get(provider_name)
+
+    # caching is enabled unless cache is passed ONCE with "f" or "0" as value
+    caching = request.GET.get("cache", "1") not in ["f", "0"]
+
+    return ParsedQuery(start_date=start_date, end_date=end_date,
+                       query_str=query_str, provider_props=provider_props,
+                       provider_name=provider_name, api_key=api_key,
+                       base_url=base_url, caching=caching)
 
 
-def parse_query_array(queryObject) -> tuple:
-    # payload = json.loads(request.body).get("queryObject") if http_method == 'POST' else json.loads(request.GET.get("queryObject"))
-    payload = queryObject
+def parsed_query_from_dict(payload) -> ParsedQuery:
+    """
+    Takes a queryObject dict, returns ParsedQuery
+    """
     provider_name = payload["platform"]
     query_str = payload["query"]
     collections = payload["collections"]
     sources = payload["sources"]
-    provider_props = search_props_for_provider(provider_name, collections, sources, queryObject)
-    # api_key = _get_api_key(provider_name)
-    start_date = payload["startDate"]
-    start_date = dt.datetime.strptime(start_date, '%m/%d/%Y')
-    end_date = payload["endDate"]
-    end_date = dt.datetime.strptime(end_date, '%m/%d/%Y')
+    provider_props = search_props_for_provider(provider_name, collections, sources, payload)
+    start_date_str = payload["startDate"]
+    start_date = dt.datetime.strptime(start_date_str, '%m/%d/%Y')
+    end_date_str = payload["endDate"]
+    end_date = dt.datetime.strptime(end_date_str, '%m/%d/%Y')
     api_key = _get_api_key(provider_name)
-    base_url = NEWS_SEARCH_API_URL if provider_name == 'onlinenews-mediacloud' else None 
-    return start_date, end_date, query_str, provider_props, provider_name, api_key, base_url
+    base_url = _BASE_URL.get(provider_name)
+    caching = payload.get("caching", True)
+    return ParsedQuery(start_date=start_date, end_date=end_date,
+                       query_str=query_str, provider_props=provider_props,
+                       provider_name=provider_name, api_key=api_key,
+                       base_url=base_url, caching=caching)
 
-
-def _get_api_key(provider: str) -> str:
+def _get_api_key(provider: str) -> str | None:
     # no system-level API keys right now
     return None
 
-
-def search_props_for_provider(provider, collections: List, sources: List, all_params: Dict = None) -> Dict:
+def search_props_for_provider(provider, collections: List, sources: List, all_params: Dict) -> Dict:
     if provider == provider_name(PLATFORM_TWITTER, PLATFORM_SOURCE_TWITTER):
         return _for_twitter_api(collections, sources)
     if provider == provider_name(PLATFORM_YOUTUBE, PLATFORM_SOURCE_YOUTUBE):
