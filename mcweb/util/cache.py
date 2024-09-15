@@ -26,7 +26,7 @@ def cached_function_call(fn: Callable, cache_prefix: str, seconds: int | None = 
     # tweaked key generation to delimit concatenated strings with non-printing
     # characters unlikely to appear in argument strings to avoid ambiguity
     # (everything was one continuous string)
-    elements = []
+    elements = [cache_prefix]
     for arg in args:
         elements.append(str(arg))
     for key, val in kwargs.items():
