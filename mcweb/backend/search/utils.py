@@ -1,10 +1,16 @@
+# Python
 import datetime as dt
 import json
-from typing import List, Dict, NamedTuple
+from typing import List, Dict, NamedTuple, Optional
+
+# PyPI
 from django.apps import apps
-from mc_providers import provider_name, PLATFORM_TWITTER, PLATFORM_SOURCE_TWITTER, PLATFORM_YOUTUBE,\
+from mc_providers import provider_by_name, provider_name, ContentProvider, \
+    PLATFORM_TWITTER, PLATFORM_SOURCE_TWITTER, PLATFORM_YOUTUBE,\
     PLATFORM_SOURCE_YOUTUBE, PLATFORM_REDDIT, PLATFORM_SOURCE_PUSHSHIFT, PLATFORM_SOURCE_MEDIA_CLOUD,\
     PLATFORM_SOURCE_WAYBACK_MACHINE, PLATFORM_ONLINE_NEWS
+
+# mcweb
 from settings import NEWS_SEARCH_API_URL
 
 
@@ -22,6 +28,13 @@ _BASE_URL = {
     'onlinenews-mediacloud': NEWS_SEARCH_API_URL,
 }
 
+
+def pq_provider(pq: ParsedQuery, platform: Optional[str] = None) -> ContentProvider:
+    """
+    take parsed query, return mc_providers ContentProvider.
+    (one place to pass new things to mc_providers)
+    """
+    return provider_by_name(platform or pq.provider_name, pq.api_key, pq.base_url, pq.caching)
 
 def fill_in_dates(start_date, end_date, existing_counts):
     delta = (end_date + dt.timedelta(1)) - start_date
