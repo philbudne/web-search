@@ -52,10 +52,10 @@ def mc_providers_cacher(fn: Callable, cache_prefix: str, *args, **kwargs) -> tup
     return cached_function_call(fn, cache_prefix, None, *args, **kwargs)
 
 # decorator for caching functions/methods in backend code
-def cache_by_kwargs(time_secs, seconds: int | None = None):
+def cache_by_kwargs(seconds: int | None = None):
     def decorator(fn):
         def wrapper(*args, **kwargs):
-            value, cached = cached_function_call(fn, fn.__name__, seconds, *args, **kwargs)
+            value, cached = cached_function_call(fn, fn.__qualname__, seconds, *args, **kwargs)
             return value
         return wrapper
 
