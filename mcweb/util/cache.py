@@ -37,17 +37,17 @@ def cached_function_call(fn: Callable, cache_prefix: str, seconds: int | None = 
     results = cache.get(key)
     if results:
         # increment counter?
-        logger.debug("found %s", readable_key)
+        logger.debug("found %r", readable_key)
         return results, True
 
-    logger.debug("not found %s", readable_key)
+    logger.debug("not found %r", readable_key)
     results = fn(*args, **kwargs)
     if seconds is None:
         # this is the one place where the default value is used.
         # NOTE! used here to allow wacking CACHE_SECONDS in debugger!
         seconds = CACHE_SECONDS
     cache.set(key, results, seconds)
-    logger.debug("set %s", readable_key)
+    logger.debug("set %r", readable_key)
     return results, False
 
 def mc_providers_cacher(fn: Callable, cache_prefix: str, *args, **kwargs) -> tuple[Any, bool]:
