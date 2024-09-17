@@ -76,6 +76,7 @@ env = environ.Env(      # @@CONFIGURATION@@ definitions
     EMAIL_NOREPLY=(str, 'noreply@mediacloud.org'),
     EMAIL_ORGANIZATION=(str, "Media Cloud Development"),
     GIT_REV=(str, ""),
+    LOG_LEVEL=(str, "DEBUG"),
     NEWS_SEARCH_API_URL=(str, "http://ramos.angwin:8000/v1/"),
     PROVIDERS_TIMEOUT=(int, 60*10),
     SCRAPE_ERROR_RECIPIENTS=(list, []),
@@ -316,7 +317,7 @@ LOGGING = {
     },
     'root': {
         'handlers': ['console'],
-        'level': 'DEBUG',
+        'level': env('LOG_LEVEL').upper(),
     },
 }
 
