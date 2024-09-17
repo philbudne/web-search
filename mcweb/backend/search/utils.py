@@ -56,10 +56,19 @@ def fill_in_dates(start_date, end_date, existing_counts):
     return filled_counts
 
 
-def parse_query(request) -> ParsedQuery:
-    http_method = request.method
+def parse_date_str(date_str: str) -> dt.datetime:
+    """
+    accept both YYYY-MM-DD and MM/DD/YYYY
+    (was accepting former in JSON and latter in GET/query-str)
+    """
+    if '-' in date_str:
+        return dt.datetime.strptime(date_str, '%Y-%m-%d')
+    else:
+        return dt.datetime.strptime(date_str, '%m/%d/%Y')
 
-    if http_method == 'POST':
+
+def parse_query(request) -> ParsedQuery:
+    if request.method == 'POST':
         payload = json.loads(request.body).get("queryObject")
         return parsed_query_from_dict(payload)
 
@@ -75,10 +84,8 @@ def parse_query(request) -> ParsedQuery:
         sources, 
         request.GET
     )
-    start_date_str = request.GET.get("start", "2010-01-01")
-    start_date = dt.datetime.strptime(start_date_str, '%Y-%m-%d')
-    end_date_str = request.GET.get("end", "2030-01-01")
-    end_date = dt.datetime.strptime(end_date_str, '%Y-%m-%d')
+    start_date = parse_date_str(request.GET.get("start", "2010-01-01"))
+    end_date = parse_date_str(request.GET.get("end", "2030-01-01"))
     api_key = _get_api_key(provider_name)
     base_url = _BASE_URL.get(provider_name)
 
@@ -100,10 +107,8 @@ def parsed_query_from_dict(payload) -> ParsedQuery:
     collections = payload["collections"]
     sources = payload["sources"]
     provider_props = search_props_for_provider(provider_name, collections, sources, payload)
-    start_date_str = payload["startDate"]
-    start_date = dt.datetime.strptime(start_date_str, '%m/%d/%Y')
-    end_date_str = payload["endDate"]
-    end_date = dt.datetime.strptime(end_date_str, '%m/%d/%Y')
+    start_date = parse_date_str(payload["startDate"])
+    end_date = parse_date_str(payload["endDate"])
     api_key = _get_api_key(provider_name)
     base_url = _BASE_URL.get(provider_name)
     caching = payload.get("caching", True)
