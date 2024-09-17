@@ -1,6 +1,7 @@
 # Python
 import datetime as dt
 import json
+import time
 from typing import List, Dict, NamedTuple, Optional
 
 # PyPI
@@ -12,7 +13,6 @@ from mc_providers import provider_by_name, provider_name, ContentProvider, \
 
 # mcweb
 from settings import NEWS_SEARCH_API_URL
-
 
 class ParsedQuery(NamedTuple):
     start_date: dt.datetime
@@ -218,3 +218,9 @@ def _for_media_cloud(collections: List, sources: List, all_params: Dict) -> Dict
         if prop_name in all_params:
             extra_props[prop_name] = all_params.get(prop_name)
     return extra_props
+
+def filename_timestamp() -> str:
+    """
+    used for CSV & ZIP filenames in both views.py and tasks.py
+    """
+    return time.strftime("%Y%m%d%H%M%S", time.localtime())

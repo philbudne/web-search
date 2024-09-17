@@ -6,7 +6,7 @@ import collections
 import requests
 from typing import Optional
 
-# PyPi
+# PyPI
 import mc_providers
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseBadRequest, HttpResponseForbidden, HttpResponse
@@ -24,7 +24,7 @@ from util.cache import cache_by_kwargs, mc_providers_cacher
 from util.csvwriter import CSVWriterHelper
 
 # mcweb/backend/search (local dir)
-from .utils import parse_query, parsed_query_from_dict, pq_provider, ParsedQuery
+from .utils import parse_query, parsed_query_from_dict, pq_provider, ParsedQuery, filename_timestamp
 from .tasks import download_all_large_content_csv, download_all_queries_csv_task
 
 # mcweb/backend/users
@@ -172,7 +172,7 @@ def download_sources_csv(request):
         logger.exception(e)
         return error_response(str(e), HttpResponseBadRequest)
     QuotaHistory.increment(request.user.id, request.user.is_staff, pq.provider_name, 2)
-    filename = "mc-{}-{}-top-sources".format(pq.provider_name, _filename_timestamp())
+    filename = "mc-{}-{}-top-sources".format(pq.provider_name, filename_timestamp())
     response = HttpResponse(
         content_type='text/csv',
         headers={'Content-Disposition': f"attachment; filename={filename}.csv"},
@@ -214,7 +214,7 @@ def download_languages_csv(request):
         logger.exception(e)
         return error_response(str(e), HttpResponseBadRequest)
     QuotaHistory.increment(request.user.id, request.user.is_staff, pq.provider_name, 2)
-    filename = "mc-{}-{}-top-languages".format(pq.provider_name, _filename_timestamp())
+    filename = "mc-{}-{}-top-languages".format(pq.provider_name, _ilename_timestamp())
     response = HttpResponse(
         content_type='text/csv',
         headers={'Content-Disposition': f"attachment; filename={filename}.csv"},
@@ -277,7 +277,7 @@ def download_words_csv(request):
         logger.exception(e)
         return error_response(str(e), HttpResponseBadRequest)
     QuotaHistory.increment(request.user.id, request.user.is_staff, pq.provider_name, 4)
-    filename = "mc-{}-{}-top-words".format(pq.provider_name, _filename_timestamp())
+    filename = "mc-{}-{}-top-words".format(pq.provider_name, filename_timestamp())
     response = HttpResponse(
         content_type='text/csv',
         headers={'Content-Disposition': f"attachment; filename={filename}.csv"},
@@ -303,7 +303,7 @@ def download_counts_over_time_csv(request):
         normalized = False
     QuotaHistory.increment(request.user.id, request.user.is_staff, pq.provider_name, 2)
     filename = "mc-{}-{}-counts".format(
-        pq.provider_name, _filename_timestamp())
+        pq.provider_name, filename_timestamp())
     response = HttpResponse(
         content_type='text/csv',
         headers={'Content-Disposition': f"attachment; filename={filename}.csv"},
@@ -342,7 +342,7 @@ def download_all_content_csv(request):
                 first_page = False
 
     filename = "mc-{}-{}-content".format(
-        pq.provider_name, _filename_timestamp())
+        pq.provider_name, filename_timestamp())
     streamer = csv_stream.CSVStream(filename, data_generator)
     return streamer.stream()
 
@@ -389,5 +389,3 @@ def add_ratios(words_data):
     return words_data
 
 
-def _filename_timestamp() -> str:
-    return time.strftime("%Y%m%d%H%M%S", time.localtime())
