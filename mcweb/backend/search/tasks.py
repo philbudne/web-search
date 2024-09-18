@@ -33,6 +33,28 @@ def download_all_large_content_csv(queryState, user_id, user_isStaff, email):
 
 @background(remove_existing_tasks=True)
 def _download_all_large_content_csv(queryState, user_id, user_isStaff, email):
+    # Phil: maybe send email on error?
+
+    logger.info("starting large_content_csv for %s; %d query/ies",
+                email, len(queryState)
+
+    # make matching filenames
+    prefix = "mc-{}-{}-content".format(pq.provider_name, filename_timestamp())
+    csv_filename = prefix + ".csv"
+    zip_filename = prefix + ".zip"
+
+    # if the size of the uncompressed data is ever an issue
+    # (taking too much memory) do:
+    #    csv_filename = f"/var/tmp/{csv_filename}.csv"
+    #    csvfile = open(csv_filename, "w")
+    # and at the end call
+    #    csvfile.close()
+    #    csvfile = None
+    #    zipfile_obj.write(csv_filename, ....)
+    # and in a try/finally (regardless of success):
+    #    if csvfile: csvfile.close()
+    #    os.unlink(csv_filename)
+
     # Create a StringIO object to store the CSV data
     csvfile = StringIO()
     csvwriter = csv.writer(csvfile)
@@ -46,6 +68,7 @@ def _download_all_large_content_csv(queryState, user_id, user_isStaff, email):
     # breaking it!
 
     first_page = True           # just once
+    stories = 0
     for query in queryState:
         pq = parsed_query_from_dict(query)
         provider = pq_provider(pq)
@@ -53,12 +76,12 @@ def _download_all_large_content_csv(queryState, user_id, user_isStaff, email):
                                     pq.end_date, **pq.provider_props)
         for page in result:
             QuotaHistory.increment(user_id, user_isStaff, pq.provider_name)
-            if first_page:  # send back column names, which differ by platform
-                print("first_page", type(page), type(page[0]), page[0])
+            if first_page:  # column names differ by platform
                 csvwriter.writerow(list(page[0].keys()))
                 first_page = False
             for story in page:
                 csvwriter.writerow([v for k, v in sorted(story.items())])
+                stories += 1
 
     # code from: https://stackoverflow.com/questions/17584550/attach-generated-csv-file-to-email-and-send-with-django
     
@@ -68,13 +91,6 @@ def _download_all_large_content_csv(queryState, user_id, user_isStaff, email):
     # Create a ZipFile object using the in-memory byte stream
     zipfile_obj = zipfile.ZipFile(zipstream, 'w', zipfile.ZIP_DEFLATED)
 
-    prefix = "mc-{}-{}-content".format(pq.provider_name, filename_timestamp())
-    csv_filename = prefix + ".csv"
-    zip_filename = prefix + ".zip"
-
-    for data in data_generator():
-        csvwriter.writerow(data)
-   
     # Convert the CSV data from StringIO to bytes
     csv_data = csvfile.getvalue()
     # Add the CSV data to the zip file
@@ -85,7 +101,8 @@ def _download_all_large_content_csv(queryState, user_id, user_isStaff, email):
     zipped_data = zipstream.getvalue()
 
     send_zipped_large_download_email(zip_filename, zipped_data, email)
-    logger.info("Sent Email to %s (csv: %d, zip: %d)", email, len(csv_data), len(zipped_data))
+    logger.info("Sent Email to %s (%d stories, csv: %d, zip: %d)",
+                email, stories, len(csv_data), len(zipped_data))
 
 def download_all_queries_csv_task(data, request):
     task = _download_all_queries_csv(data, request.user.id, request.user.is_staff, request.user.email)
