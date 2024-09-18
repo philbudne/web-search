@@ -54,7 +54,8 @@ def _download_all_large_content_csv(queryState, user_id, user_isStaff, email):
         for page in result:
             QuotaHistory.increment(user_id, user_isStaff, pq.provider_name)
             if first_page:  # send back column names, which differ by platform
-                csvwriter.writerow(list(page.keys()))
+                print("first_page", type(page), type(page[0]), page[0])
+                csvwriter.writerow(list(page[0].keys()))
                 first_page = False
             for story in page:
                 csvwriter.writerow([v for k, v in sorted(story.items())])
