@@ -70,7 +70,9 @@ env = environ.Env(      # @@CONFIGURATION@@ definitions
     CSRF_TRUSTED_ORIGINS=(list, _DEFAULT_CSRF_TRUSTED_ORIGINS),
     DEBUG=(bool, False),
     EMAIL_BACKEND=(str, 'django.core.mail.backends.smtp.EmailBackend'),
-    # EMAIL_HOST[_{PASWORD,USER}] must be supplied
+    EMAIL_HOST=(str, ""),
+    EMAIL_HOST_PASSWORD=(str, ""),
+    EMAIL_HOST_USER=(str, ""),
     EMAIL_HOST_PORT=(int,465),  # ssmtp (SSL submission)
     EMAIL_HOST_USE_SSL=(bool, True),
     EMAIL_NOREPLY=(str, 'noreply@mediacloud.org'),
@@ -112,30 +114,17 @@ DEBUG = env("DEBUG")
 
 EARLIEST_AVAILABLE_DATE = env('EARLIEST_AVAILABLE_DATE') # earliest available date for elastic search
 
+EMAIL_BACKEND = env('EMAIL_BACKEND') # select django.core.mail.backend
+
+# vars used by django.core.mail.backends.smtp.EmailBackend:
+EMAIL_HOST = env('EMAIL_HOST')
+EMAIL_HOST_USER = env('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
+EMAIL_HOST_PORT = env('EMAIL_HOST_PORT')
+EMAIL_HOST_USE_SSL = env('EMAIL_HOST_USE_SSL')
+
 EMAIL_NOREPLY = env('EMAIL_NOREPLY') # email sender address
 EMAIL_ORGANIZATION = env('EMAIL_ORGANIZATION') # used in subject line
-
-# email authentication
-try:
-    EMAIL_BACKEND = env('EMAIL_BACKEND')
-
-    # vars used by django.core.mail.backends.smtp.EmailBackend:
-    EMAIL_HOST = env('EMAIL_HOST') # no default
-    EMAIL_HOST_USER = env('EMAIL_HOST_USER') # no default
-    EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD') # no default
-    EMAIL_HOST_PORT = env('EMAIL_HOST_PORT')
-    EMAIL_HOST_USE_SSL = env('EMAIL_HOST_USE_SSL')
-    assert EMAIL_HOST, "EMAIL_HOST is empty"
-    logger.info("Email host %s", EMAIL_HOST)
-except (ImproperlyConfigured, AssertionError) as exc:
-    # don't require email settings (for development)
-    logger.warning("Email not configured: %s", exc)
-    EMAIL_BACKEND = None
-    EMAIL_HOST = None
-    EMAIL_HOST_USER = None
-    EMAIL_HOST_PASSWORD = None
-    EMAIL_HOST_PORT = None
-    EMAIL_HOST_USE_SSL = None
 
 GIT_REV = env("GIT_REV")      # supplied by Dokku, returned by /api/version
 
@@ -334,6 +323,25 @@ CACHES = {
 }
 
 DISABLE_SERVER_SIDE_CURSORS = True
+
+# validate email authentication: after logging config
+logger.warning("warning")
+logger.info("info")
+logger.debug("debug")
+try:
+    assert EMAIL_HOST, "EMAIL_HOST is empty"
+    assert EMAIL_HOST_PASSWORD, "EMAIL_HOST_PASSWORD is empty"
+    assert EMAIL_HOST_USER, "EMAIL_HOST_USER is empty"
+    logger.info("Email host %s", EMAIL_HOST)
+except AssertionError as exc:
+    # don't require email settings (for development)
+    logger.warning("Email not configured: %s", exc)
+    EMAIL_BACKEND = None
+    EMAIL_HOST = None
+    EMAIL_HOST_USER = None
+    EMAIL_HOST_PASSWORD = None
+    EMAIL_HOST_PORT = None
+    EMAIL_HOST_USE_SSL = None
 
 # sentry config for Python code:
 if SENTRY_DSN and SENTRY_ENV:
