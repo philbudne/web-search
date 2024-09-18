@@ -36,12 +36,7 @@ def _download_all_large_content_csv(queryState, user_id, user_isStaff, email):
     # Phil: maybe send email on error?
 
     logger.info("starting large_content_csv for %s; %d query/ies",
-                email, len(queryState)
-
-    # make matching filenames
-    prefix = "mc-{}-{}-content".format(pq.provider_name, filename_timestamp())
-    csv_filename = prefix + ".csv"
-    zip_filename = prefix + ".zip"
+                email, len(queryState))
 
     # if the size of the uncompressed data is ever an issue
     # (taking too much memory) do:
@@ -82,6 +77,11 @@ def _download_all_large_content_csv(queryState, user_id, user_isStaff, email):
             for story in page:
                 csvwriter.writerow([v for k, v in sorted(story.items())])
                 stories += 1
+
+    # make matching filenames
+    prefix = "mc-{}-{}-content".format(pq.provider_name, filename_timestamp())
+    csv_filename = prefix + ".csv"
+    zip_filename = prefix + ".zip"
 
     # code from: https://stackoverflow.com/questions/17584550/attach-generated-csv-file-to-email-and-send-with-django
     
