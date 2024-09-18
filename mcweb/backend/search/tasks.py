@@ -36,7 +36,7 @@ def _download_all_large_content_csv(queryState, user_id, user_isStaff, email):
     # Phil: maybe send email on error?
 
     logger.info("starting large_content_csv for %s; %d query/ies",
-                email, len(queryState)
+                email, len(queryState))
 
     # make matching filenames
     prefix = "mc-{}-{}-content".format(pq.provider_name, filename_timestamp())
