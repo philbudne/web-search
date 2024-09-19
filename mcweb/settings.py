@@ -296,6 +296,8 @@ APPEND_SLASH = False
 
 MAX_ATTEMPTS = 1
 
+LL = env('LOG_LEVEL').upper()
+print("LL", LL)
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -306,7 +308,7 @@ LOGGING = {
     },
     'root': {
         'handlers': ['console'],
-        'level': env('LOG_LEVEL').upper(),
+        'level': LL,
     },
 }
 
@@ -328,6 +330,7 @@ DISABLE_SERVER_SIDE_CURSORS = True
 logger.warning("warning")
 logger.info("info")
 logger.debug("debug")
+print("EM", EMAIL_HOST, EMAIL_HOST_PASSWORD, EMAIL_HOST_USER)
 try:
     assert EMAIL_HOST, "EMAIL_HOST is empty"
     assert EMAIL_HOST_PASSWORD, "EMAIL_HOST_PASSWORD is empty"
