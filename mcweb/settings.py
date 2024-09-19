@@ -60,7 +60,7 @@ if ADMIN_EMAIL:
 # necessary to run source alerts
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", ADMIN_EMAIL) # user in database
 
-env = environ.Env(      # @@CONFIGURATION@@ definitions
+env = environ.Env(      # @@CONFIGURATION@@ definitions (datatype, default value)
     # (cast, default_value) in alphabetical order:
     ALERTS_RECIPIENTS=(list, _DEFAULT_ALERTS_RECIPIENTS),
     ALLOWED_HOSTS=(list, _DEFAULT_ALLOWED_HOSTS),
@@ -127,7 +127,7 @@ EMAIL_NOREPLY = env('EMAIL_NOREPLY') # email sender address
 EMAIL_ORGANIZATION = env('EMAIL_ORGANIZATION') # used in subject line
 
 GIT_REV = env("GIT_REV")      # supplied by Dokku, returned by /api/version
-
+LOG_LEVEL = env('LOG_LEVEL').upper()
 NEWS_SEARCH_API_URL = env('NEWS_SEARCH_API_URL')
 PROVIDERS_TIMEOUT = env('PROVIDERS_TIMEOUT')
 
@@ -296,8 +296,6 @@ APPEND_SLASH = False
 
 MAX_ATTEMPTS = 1
 
-LL = env('LOG_LEVEL').upper()
-print("LL", LL)
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -308,7 +306,7 @@ LOGGING = {
     },
     'root': {
         'handlers': ['console'],
-        'level': LL,
+        'level': LOG_LEVEL,
     },
 }
 
@@ -326,11 +324,13 @@ CACHES = {
 
 DISABLE_SERVER_SIDE_CURSORS = True
 
-# validate email authentication: after logging config
-logger.warning("warning")
-logger.info("info")
-logger.debug("debug")
-print("EM", EMAIL_HOST, EMAIL_HOST_PASSWORD, EMAIL_HOST_USER)
+################
+# since this file is read before logging is configured,
+# logging before here is .... unreliable
+
+# this is what happens by default in django.setup() (after loading this file):
+logging.config.dictConfig(LOGGING)
+
 try:
     assert EMAIL_HOST, "EMAIL_HOST is empty"
     assert EMAIL_HOST_PASSWORD, "EMAIL_HOST_PASSWORD is empty"
@@ -365,4 +365,5 @@ if SENTRY_DSN and SENTRY_ENV:
 else:
     logger.warning("Sentry not configured")
 
-# add configuration variables above (search for @@CONFIGURATION@@)
+# add configuration variables above
+# (search for @@CONFIGURATION@@ above, in two places)
