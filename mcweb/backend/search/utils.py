@@ -67,6 +67,11 @@ def parse_date_str(date_str: str) -> dt.datetime:
         return dt.datetime.strptime(date_str, '%m/%d/%Y')
 
 
+def listify(input: str) -> list[str]:
+    if input:
+        return input.split(',')
+    return []
+
 def parse_query(request) -> ParsedQuery:
     if request.method == 'POST':
         payload = json.loads(request.body).get("queryObject")
@@ -74,14 +79,12 @@ def parse_query(request) -> ParsedQuery:
 
     provider_name = request.GET.get("p", 'onlinenews-mediacloud')
     query_str = request.GET.get("q", "*")
-    collections_str = request.GET.get("cs", None)
-    collections = collections_str.split(",") if collections_str is not None else []
-    sources_str = request.GET.get("ss", None)
-    sources = sources_str.split(",") if sources_str is not None else []
+    collections = listify(request.GET.get("cs", None))
+    sources = listify(request.GET.get("ss", None))
     provider_props = search_props_for_provider(
-        provider_name, 
+        provider_name,
         collections,
-        sources, 
+        sources,
         request.GET
     )
     start_date = parse_date_str(request.GET.get("start", "2010-01-01"))
