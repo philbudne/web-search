@@ -14,7 +14,7 @@ import mc_providers
 from background_task import background
 
 # mcweb/backend/search (local directorty)
-from .utils import parsed_query_from_dict, pq_provider, ParsedQuery, filename_timestamp
+from .utils import parsed_query_from_dict, pq_provider, ParsedQuery, filename_timestamp, all_content_csv_generator
 
 # mcweb/backend
 from ..users.models import QuotaHistory
@@ -26,77 +26,62 @@ from util.send_emails import send_zipped_large_download_email
 logger = logging.getLogger(__name__)
 
 
-def download_all_large_content_csv(queryState, user_id, user_isStaff, email):
+# called from /api/search/send-email-large-download-csv endpoint
+# by frontend sendTotalAttentionDataEmail
+def download_all_large_content_csv(parsed_queries: list[ParsedQuery], user_id, user_isStaff, email):
     task = _download_all_large_content_csv(
-        queryState, user_id, user_isStaff, email)
+        parsed_queries, user_id, user_isStaff, email)
     return {'task': _return_task(task)}
 
 @background(remove_existing_tasks=True)
-def _download_all_large_content_csv(queryState, user_id, user_isStaff, email):
-    # Phil: maybe send email on error?
+def _download_all_large_content_csv(parsed_queries: list[ParsedQuery], user_id, user_isStaff, email):
+    # Phil: maybe catch exception, and send email?
 
     logger.info("starting large_content_csv for %s; %d query/ies",
-                email, len(queryState))
+                email, len(parsed_queries))
 
-    # if the size of the uncompressed data is ever an issue
+    # if the uncompressed data size is ever an issue
     # (taking too much memory) do:
-    #    csv_filename = f"/var/tmp/{csv_filename}.csv"
-    #    csvfile = open(csv_filename, "w")
-    # and at the end call
-    #    csvfile.close()
-    #    csvfile = None
+    # try:
+    #    with open("/var/tmp/" + csv_filename, "w") as csvfile:
+    #       write to file....
+    # and after:
     #    zipfile_obj.write(csv_filename, ....)
-    # and in a try/finally (regardless of success):
-    #    if csvfile: csvfile.close()
+    #    send email....
+    # finally:
     #    os.unlink(csv_filename)
+
+    filename, generator = all_content_csv_generator(parsed_queries, user_id, user_isStaff)
+
+    # always make matching filenames
+    csv_filename = filename + ".csv"
+    zip_filename = filename + ".zip"
 
     # Create a StringIO object to store the CSV data
     csvfile = StringIO()
     csvwriter = csv.writer(csvfile)
 
     # Generate and write data to the CSV
-
-    # Phil: was collecting all query results in a list, and provided a
-    # generator function to iterate thru results.  It was also
-    # outputting a header line for each query, intertwingled with data
-    # (in a single file)! Hopefully, I've clarified this without
-    # breaking it!
-
-    first_page = True           # just once
-    stories = 0
-    for query in queryState:
-        pq = parsed_query_from_dict(query)
-        provider = pq_provider(pq)
-        result = provider.all_items(pq.query_str, pq.start_date,
-                                    pq.end_date, **pq.provider_props)
-        for page in result:
-            QuotaHistory.increment(user_id, user_isStaff, pq.provider_name)
-            if first_page:  # column names differ by platform
-                csvwriter.writerow(list(page[0].keys()))
-                first_page = False
-            for story in page:
-                csvwriter.writerow([v for k, v in sorted(story.items())])
-                stories += 1
-
-    # make matching filenames
-    prefix = "mc-{}-{}-content".format(pq.provider_name, filename_timestamp())
-    csv_filename = prefix + ".csv"
-    zip_filename = prefix + ".zip"
+    stories = 0                 # for logging
+    for row in generator():     # generator handles quota
+        csvwriter.writerow(row)
+        stories += 1
 
     # code from: https://stackoverflow.com/questions/17584550/attach-generated-csv-file-to-email-and-send-with-django
     
-    # Create an in-memory byte stream
+    # Create an in-memory byte stream, and wrap ZipFile object around it
     zipstream = BytesIO()
-
-    # Create a ZipFile object using the in-memory byte stream
     zipfile_obj = zipfile.ZipFile(zipstream, 'w', zipfile.ZIP_DEFLATED)
 
     # Convert the CSV data from StringIO to bytes
     csv_data = csvfile.getvalue()
+
     # Add the CSV data to the zip file
     zipfile_obj.writestr(csv_filename, csv_data)
+
     # Close the zip file
     zipfile_obj.close()
+
     # Get the zip data
     zipped_data = zipstream.getvalue()
 
@@ -108,12 +93,10 @@ def download_all_queries_csv_task(data, request):
     task = _download_all_queries_csv(data, request.user.id, request.user.is_staff, request.user.email)
     return {'task': _return_task(task)}
 
-# Phil writes:
-#
-# As I found it, this function used query.thing, which I don't think
-# could have worked!  It also (and still) only outputs data for the
-# last query, and passes raw "data" to csvwriter.writerow *AND* it
-# does a top languages query!
+# Phil writes: As I found it, this function used query.thing, which I
+# don't think could have worked (was a regular tuple)!  It also (and
+# still) only outputs data for the last query, and passes raw "data"
+# to csvwriter.writerow *AND* it does a top languages query!
 #
 # I'm also unconvinced this can be called
 # frontend/src/features/search/util/CSVDialog.jsx has:
