@@ -9,6 +9,8 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 # mcweb
 from settings import (
+    ALL_CONTENT_CSV_EMAIL_MAX,
+    ALL_CONTENT_CSV_EMAIL_MIN,
     ANALYTICS_MATOMO_DOMAIN,
     ANALYTICS_MATOMO_SITE_ID,
     EARLIEST_AVAILABLE_DATE,
@@ -28,6 +30,8 @@ def index(request):
     return render(request, 'frontend/index.html', dict(
         version=VERSION,
         providers=mc_providers.available_provider_names(),
+        all_content_csv_email_max=ALL_CONTENT_CSV_EMAIL_MAX,
+        all_content_csv_email_min=ALL_CONTENT_CSV_EMAIL_MIN,
         analytics_matomo_domain=ANALYTICS_MATOMO_DOMAIN,
         analytics_matomo_id=ANALYTICS_MATOMO_SITE_ID,
         earliest_available_date=EARLIEST_AVAILABLE_DATE,

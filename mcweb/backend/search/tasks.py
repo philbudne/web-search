@@ -14,7 +14,7 @@ import mc_providers
 from background_task import background
 
 # mcweb/backend/search (local directorty)
-from .utils import parsed_query_from_dict, pq_provider, ParsedQuery, filename_timestamp, all_content_csv_generator
+from .utils import ParsedQuery, all_content_csv_basename, all_content_csv_generator, filename_timestamp, pq_provider
 
 # mcweb/backend
 from ..users.models import QuotaHistory
@@ -28,13 +28,13 @@ logger = logging.getLogger(__name__)
 
 # called from /api/search/send-email-large-download-csv endpoint
 # by frontend sendTotalAttentionDataEmail
-def download_all_large_content_csv(parsed_queries: list[ParsedQuery], user_id, user_isStaff, email):
-    task = _download_all_large_content_csv(
-        parsed_queries, user_id, user_isStaff, email)
+def download_all_large_content_csv(parsed_queries: list[ParsedQuery], user_id: int, user_isStaff: bool, email: str):
+    task = _download_all_large_content_csv(parsed_queries, user_id, user_isStaff, email)
     return {'task': _return_task(task)}
 
 @background(remove_existing_tasks=True)
-def _download_all_large_content_csv(parsed_queries: list[ParsedQuery], user_id, user_isStaff, email):
+def _download_all_large_content_csv(parsed_queries: list[ParsedQuery], user_id: int, user_isStaff: bool, email: str):
+    # code from: https://stackoverflow.com/questions/17584550/attach-generated-csv-file-to-email-and-send-with-django
     # Phil: maybe catch exception, and send email?
 
     logger.info("starting large_content_csv for %s; %d query/ies",
@@ -50,25 +50,25 @@ def _download_all_large_content_csv(parsed_queries: list[ParsedQuery], user_id, 
     #    send email....
     # finally:
     #    os.unlink(csv_filename)
+    # ***OR***
+    # switch to gzip (.gz) for compression, which provides
+    # a writeable file-like object that can be passed to csv.writer
+    # (without storing uncompressed bytes)
 
-    filename, generator = all_content_csv_generator(parsed_queries, user_id, user_isStaff)
+    data_generator = all_content_csv_generator(parsed_queries, user_id, user_isStaff)
+    basename = all_content_csv_basename(parsed_queries)
 
     # always make matching filenames
-    csv_filename = filename + ".csv"
-    zip_filename = filename + ".zip"
+    csv_filename = basename + ".csv"
+    zip_filename = basename + ".zip"
 
     # Create a StringIO object to store the CSV data
     csvfile = StringIO()
     csvwriter = csv.writer(csvfile)
 
     # Generate and write data to the CSV
-    stories = 0                 # for logging
-    for row in generator():     # generator handles quota
-        csvwriter.writerow(row)
-        stories += 1
+    csvwriter.writerow(data_generator())
 
-    # code from: https://stackoverflow.com/questions/17584550/attach-generated-csv-file-to-email-and-send-with-django
-    
     # Create an in-memory byte stream, and wrap ZipFile object around it
     zipstream = BytesIO()
     zipfile_obj = zipfile.ZipFile(zipstream, 'w', zipfile.ZIP_DEFLATED)
@@ -86,8 +86,8 @@ def _download_all_large_content_csv(parsed_queries: list[ParsedQuery], user_id, 
     zipped_data = zipstream.getvalue()
 
     send_zipped_large_download_email(zip_filename, zipped_data, email)
-    logger.info("Sent Email to %s (%d stories, csv: %d, zip: %d)",
-                email, stories, len(csv_data), len(zipped_data))
+    logger.info("Sent Email to %s (csv: %d, zip: %d)",
+                email, len(csv_data), len(zipped_data))
 
 def download_all_queries_csv_task(data, request):
     task = _download_all_queries_csv(data, request.user.id, request.user.is_staff, request.user.email)

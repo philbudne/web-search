@@ -12,7 +12,7 @@ from mc_providers import provider_by_name, provider_name, ContentProvider, \
     PLATFORM_SOURCE_WAYBACK_MACHINE, PLATFORM_ONLINE_NEWS
 
 # mcweb
-from settings import NEWS_SEARCH_API_URL
+from settings import ALL_CONTENT_CSV_EMAIL_MAX, ALL_CONTENT_CSV_EMAIL_MIN, NEWS_SEARCH_API_URL
 
 class ParsedQuery(NamedTuple):
     start_date: dt.datetime
@@ -36,6 +36,7 @@ def pq_provider(pq: ParsedQuery, platform: Optional[str] = None) -> ContentProvi
     """
     return provider_by_name(platform or pq.provider_name, pq.api_key, pq.base_url, pq.caching)
 
+# not used?
 def fill_in_dates(start_date, end_date, existing_counts):
     delta = (end_date + dt.timedelta(1)) - start_date
     date_count_dict = {k['date']: k['count'] for k in existing_counts}
@@ -54,99 +55,6 @@ def fill_in_dates(start_date, end_date, existing_counts):
         else:
             filled_counts.append({'count': date_count_dict[day_string], 'date': day_string})
     return filled_counts
-
-
-def parse_date_str(date_str: str) -> dt.datetime:
-    """
-    accept both YYYY-MM-DD and MM/DD/YYYY
-    (was accepting former in JSON and latter in GET/query-str)
-    """
-    if '-' in date_str:
-        return dt.datetime.strptime(date_str, '%Y-%m-%d')
-    else:
-        return dt.datetime.strptime(date_str, '%m/%d/%Y')
-
-
-def listify(input: str) -> List[str]:
-    if input:
-        return input.split(',')
-    return []
-
-def parse_query(request) -> ParsedQuery:
-    if request.method == 'POST':
-        payload = json.loads(request.body).get("queryObject")
-        return parsed_query_from_dict(payload)
-
-    provider_name = request.GET.get("p", 'onlinenews-mediacloud')
-    query_str = request.GET.get("q", "*")
-    collections = listify(request.GET.get("cs", None))
-    sources = listify(request.GET.get("ss", None))
-    provider_props = search_props_for_provider(
-        provider_name,
-        collections,
-        sources,
-        request.GET
-    )
-    start_date = parse_date_str(request.GET.get("start", "2010-01-01"))
-    end_date = parse_date_str(request.GET.get("end", "2030-01-01"))
-    api_key = _get_api_key(provider_name)
-    base_url = _BASE_URL.get(provider_name)
-
-    # caching is enabled unless cache is passed ONCE with "f" or "0" as value
-    caching = request.GET.get("cache", "1") not in ["f", "0"]
-
-    return ParsedQuery(start_date=start_date, end_date=end_date,
-                       query_str=query_str, provider_props=provider_props,
-                       provider_name=provider_name, api_key=api_key,
-                       base_url=base_url, caching=caching)
-
-
-def parsed_query_from_dict(payload) -> ParsedQuery:
-    """
-    Takes a queryObject dict, returns ParsedQuery
-    """
-    provider_name = payload["platform"]
-    query_str = payload["query"]
-    collections = payload["collections"]
-    sources = payload["sources"]
-    provider_props = search_props_for_provider(provider_name, collections, sources, payload)
-    start_date = parse_date_str(payload["startDate"])
-    end_date = parse_date_str(payload["endDate"])
-    api_key = _get_api_key(provider_name)
-    base_url = _BASE_URL.get(provider_name)
-    caching = payload.get("caching", True)
-    return ParsedQuery(start_date=start_date, end_date=end_date,
-                       query_str=query_str, provider_props=provider_props,
-                       provider_name=provider_name, api_key=api_key,
-                       base_url=base_url, caching=caching)
-
-def _get_api_key(provider: str) -> Optional[str]:
-    # no system-level API keys right now
-    return None
-
-def parsed_query_state_and_params(request, qs_key="queryState") -> Tuple[List[ParsedQuery], Dict]:
-    """
-    this to handle views.send_email_large_download_csv (queries + email)
-    and the more usual case of just a set of queries
-    """
-    if request.method == 'POST':
-        params = json.loads(request.body)
-        queries = params.get(qs_key)
-    else:
-        params = request.GET
-        queries = json.loads(params.get("qS"))
-
-    pqs = [parsed_query_from_dict(q) for q in queries]
-    return (pqs, params)
-
-def parsed_query_state(request) -> List[ParsedQuery]:
-    """
-    return list of parsed queries from "queryState" (list of dicts).
-    Expects POST with JSON object with a "queryState" element (download-all-queries)
-    or GET with qs=JSON_STRING (many)
-    """
-    pqs, d = parsed_query_state_and_params(request)
-    return pqs
 
 def search_props_for_provider(provider, collections: List, sources: List, all_params: Dict) -> Dict:
     if provider == provider_name(PLATFORM_TWITTER, PLATFORM_SOURCE_TWITTER):
@@ -252,9 +160,10 @@ def filename_timestamp() -> str:
     """
     return time.strftime("%Y%m%d%H%M%S", time.localtime())
 
-def all_content_csv_generator(pqs: list[ParsedQuery], user_id, is_staff) -> tuple[str, Callable[[],Generator[list, None, None]]]:
+def all_content_csv_generator(pqs: list[ParsedQuery], user_id, is_staff) -> Callable[[],Generator[list, None, None]]:
     """
-    returns base filename, and generator for rows from all queries.
+    returns function returning generator for "total attention" CSV file
+    with rows from all queries.
     used for both immediate CSV download (download_all_content_csv)
     and emailed CSV (download_all_large_content_csv)
     """
@@ -271,7 +180,11 @@ def all_content_csv_generator(pqs: list[ParsedQuery], user_id, is_staff) -> tupl
                     first_page = False
                 for story in page:
                     yield [v for k, v in sorted(story.items())]
+    return data_generator
 
-    # generate filename using provider of last query (as before)
+def all_content_csv_basename(pqs: list[ParsedQuery]) -> str:
+    """
+    returns a base filename for CSV and ZIP filenames
+    """
     base_filename = "mc-{}-{}-content".format(pqs[-1].provider_name, filename_timestamp())
-    return (base_filename, data_generator)
+    return base_filename

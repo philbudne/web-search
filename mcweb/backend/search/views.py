@@ -24,7 +24,7 @@ from util.cache import cache_by_kwargs, mc_providers_cacher
 from util.csvwriter import CSVWriterHelper
 
 # mcweb/backend/search (local dir)
-from .utils import parse_query, parsed_query_from_dict, pq_provider, ParsedQuery, filename_timestamp
+from .utils import ParsedQuery, all_content_csv_basename, all_content_csv_generator, filename_timestamp, pq_provider
 from .tasks import download_all_large_content_csv, download_all_queries_csv_task
 
 # mcweb/backend/users
@@ -53,6 +53,97 @@ def error_response(msg: str, response_type: Optional[HttpResponse]) -> HttpRespo
         note=msg,
     )))
 
+def parse_date_str(date_str: str) -> dt.datetime:
+    """
+    accept both YYYY-MM-DD and MM/DD/YYYY
+    (was accepting former in JSON and latter in GET/query-str)
+    """
+    if '-' in date_str:
+        return dt.datetime.strptime(date_str, '%Y-%m-%d')
+    else:
+        return dt.datetime.strptime(date_str, '%m/%d/%Y')
+
+
+def listify(input: str) -> List[str]:
+    if input:
+        return input.split(',')
+    return []
+
+def _get_api_key(provider: str) -> Optional[str]:
+    # no system-level API keys right now
+    return None
+
+def parse_query(request) -> ParsedQuery:
+    if request.method == 'POST':
+        payload = json.loads(request.body).get("queryObject")
+        return parsed_query_from_dict(payload)
+
+    provider_name = request.GET.get("p", 'onlinenews-mediacloud')
+    query_str = request.GET.get("q", "*")
+    collections = listify(request.GET.get("cs", None))
+    sources = listify(request.GET.get("ss", None))
+    provider_props = search_props_for_provider(
+        provider_name,
+        collections,
+        sources,
+        request.GET
+    )
+    start_date = parse_date_str(request.GET.get("start", "2010-01-01"))
+    end_date = parse_date_str(request.GET.get("end", "2030-01-01"))
+    api_key = _get_api_key(provider_name)
+    base_url = _BASE_URL.get(provider_name)
+
+    # caching is enabled unless cache is passed ONCE with "f" or "0" as value
+    caching = request.GET.get("cache", "1") not in ["f", "0"]
+
+    return ParsedQuery(start_date=start_date, end_date=end_date,
+                       query_str=query_str, provider_props=provider_props,
+                       provider_name=provider_name, api_key=api_key,
+                       base_url=base_url, caching=caching)
+
+
+def parsed_query_from_dict(payload) -> ParsedQuery:
+    """
+    Takes a queryObject dict, returns ParsedQuery
+    """
+    provider_name = payload["platform"]
+    query_str = payload["query"]
+    collections = payload["collections"]
+    sources = payload["sources"]
+    provider_props = search_props_for_provider(provider_name, collections, sources, payload)
+    start_date = parse_date_str(payload["startDate"])
+    end_date = parse_date_str(payload["endDate"])
+    api_key = _get_api_key(provider_name)
+    base_url = _BASE_URL.get(provider_name)
+    caching = payload.get("caching", True)
+    return ParsedQuery(start_date=start_date, end_date=end_date,
+                       query_str=query_str, provider_props=provider_props,
+                       provider_name=provider_name, api_key=api_key,
+                       base_url=base_url, caching=caching)
+
+def parsed_query_state_and_params(request, qs_key="queryState") -> Tuple[List[ParsedQuery], Dict]:
+    """
+    this to handle views.send_email_large_download_csv (queries + email)
+    and the more usual case of just a set of queries
+    """
+    if request.method == 'POST':
+        params = json.loads(request.body)
+        queries = params.get(qs_key)
+    else:
+        params = request.GET
+        queries = json.loads(params.get("qS"))
+
+    pqs = [parsed_query_from_dict(q) for q in queries]
+    return (pqs, params)
+
+def parsed_query_state(request) -> List[ParsedQuery]:
+    """
+    return list of parsed queries from "queryState" (list of dicts).
+    Expects POST with JSON object with a "queryState" element (download-all-queries)
+    or GET with qs=JSON_STRING (many)
+    """
+    pqs, params = parsed_query_state_and_params(request)
+    return pqs
 
 def handle_provider_errors(func):
     """
@@ -321,7 +412,8 @@ def download_counts_over_time_csv(request):
 @action(detail=False)
 def download_all_content_csv(request):
     parsed_queries = parsed_query_state(request) # handles POST!
-    filename, data_generator = all_content_csv_generator(parsed_queries, request.user.id, request.user.is_staff)
+    data_generator = all_content_csv_generator(parsed_queries, request.user.id, request.user.is_staff)
+    filename = all_content_csv_basename(parsed_queries)
     streamer = csv_stream.CSVStream(filename, data_generator)
     return streamer.stream()
 
@@ -336,10 +428,11 @@ def send_email_large_download_csv(request):
     email = payload.get('email', None)
 
     # follows similiar logic from download_all_content_csv, get information and send to tasks
+    total = 0
     for pq in pqs:
         provider = pq_provider(pq)
         try:
-            count = provider.count(f"({pq.query_str})", pq.start_date, pq.end_date, **pq.provider_props)
+            total += provider.count(f"({pq.query_str})", pq.start_date, pq.end_date, **pq.provider_props)
             # NOTE! The same limit numbers appear (twice) in
             # mcweb/frontend/src/features/search/util/TotalAttentionEmailModal.jsx
             # gives no indication that count wasn't in range!!!

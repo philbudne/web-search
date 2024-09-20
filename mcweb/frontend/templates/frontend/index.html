@@ -22,7 +22,8 @@
                 document.settings.systemAlert = undefined;
             {% endif %}
             document.settings.earliestAvailableDate = {{earliest_available_date|safe}};    
-      
+            document.settings.allContentCsvEmailMax = {{all_content_csv_email_max|safe}};
+            document.settings.allContentCsvEmailMin = {{all_content_csv_email_min|safe}};
         </script>
 
     </head>
