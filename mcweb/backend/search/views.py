@@ -162,8 +162,9 @@ def sources(request):
 @require_http_methods(["GET"])
 @action(detail=False)
 def download_sources_csv(request):
-    query = json.loads(request.GET.get("qS"))
-    pq = parsed_query_from_dict(query[0])
+    queries = parsed_query_state(request) # handles POST!
+    pq = queries[0]
+
     provider = pq_provider(pq)
     try:
         data = provider.sources(f"({pq.query_str})", pq.start_date,
@@ -204,8 +205,8 @@ def languages(request):
 @require_http_methods(["GET"])
 @action(detail=False)
 def download_languages_csv(request):
-    query = json.loads(request.GET.get("qS"))
-    pq = parsed_query_from_dict(query[0])
+    queries = parsed_query_state(request) # handles POST!
+    pq = queries[0]
     provider = pq_provider(pq)
     try:
         data = provider.languages(f"({pq.query_str})", pq.start_date,
@@ -266,8 +267,8 @@ def words(request):
 @require_http_methods(["GET"])
 @action(detail=False)
 def download_words_csv(request):
-    query = json.loads(request.GET.get("qS"))
-    pq = parsed_query_from_dict(query[0])
+    queries = parsed_query_state(request) # handles POST!
+    pq = queries[0]
     provider = pq_provider(pq)
     try:
         words = provider.words(f"({pq.query_str})", pq.start_date,
@@ -291,8 +292,8 @@ def download_words_csv(request):
 @require_http_methods(["GET"])
 @action(detail=False)
 def download_counts_over_time_csv(request):
-    query = json.loads(request.GET.get("qS"))
-    pq = parsed_query_from_dict(query[0])
+    queries = parsed_query_state(request) # handles POST!
+    pq = queries[0]
     provider = pq_provider(pq)
     try:
         data = provider.normalized_count_over_time(
@@ -319,52 +320,36 @@ def download_counts_over_time_csv(request):
 @require_http_methods(["GET"])
 @action(detail=False)
 def download_all_content_csv(request):
-    queryState = json.loads(request.GET.get("qS"))
-    data = []
-    for query in queryState:
-        pq = parsed_query_from_dict(query)
-        provider = pq_provider(pq)
-        data.append(provider.all_items(
-            f"({pq.query_str})", pq.start_date, pq.end_date, **pq.provider_props))
-
-    def data_generator():
-        for result in data:
-            first_page = True
-            for page in result:
-                QuotaHistory.increment(
-                    request.user.id, request.user.is_staff, pq.provider_name)
-                if first_page:  # send back column names, which differ by platform
-                    yield sorted(list(page[0].keys()))
-                for story in page:
-                    ordered_story = collections.OrderedDict(
-                        sorted(story.items()))
-                    yield [v for k, v in ordered_story.items()]
-                first_page = False
-
-    filename = "mc-{}-{}-content".format(
-        pq.provider_name, filename_timestamp())
+    parsed_queries = parsed_query_state(request) # handles POST!
+    filename, data_generator = all_content_csv_generator(parsed_queries, request.user.id, request.user.is_staff)
     streamer = csv_stream.CSVStream(filename, data_generator)
     return streamer.stream()
 
 
+# called by frontend sendTotalAttentionDataEmail
 @login_required(redirect_field_name='/auth/login')
 @handle_provider_errors
 @require_http_methods(["POST"])
 def send_email_large_download_csv(request):
-    # get queryState and email
-    payload = json.loads(request.body)
-    queryState = payload.get('prepareQuery', None)
+    # get queries and email
+    pqs, payload = parsed_query_state_and_params(request, 'prepareQuery')
     email = payload.get('email', None)
 
     # follows similiar logic from download_all_content_csv, get information and send to tasks
-    for query in queryState:
-        pq = parsed_query_from_dict(query)
+    for pq in pqs:
         provider = pq_provider(pq)
         try:
             count = provider.count(f"({pq.query_str})", pq.start_date, pq.end_date, **pq.provider_props)
+            # NOTE! The same limit numbers appear (twice) in
+            # mcweb/frontend/src/features/search/util/TotalAttentionEmailModal.jsx
+            # gives no indication that count wasn't in range!!!
             if count >= 25000 and count <= 200000:
-                download_all_large_content_csv(queryState, request.user.id, request.user.is_staff, email)
+                # WHOA! this calls download_all_large_content_csv with the full list of (unparsed) queries
+                # for each query in the list?! maybe desire is to pass list with single query????
+
+                download_all_large_content_csv(pqs, request.user.id, request.user.is_staff, email)
         except UnsupportedOperationException:
+            # says "continuing anyway", but doesn't?!
             return error_response("Can't count results for download in {}... continuing anyway".format(pq.provider_name))
     return HttpResponse(content_type="application/json", status=200)
 
@@ -373,10 +358,7 @@ def send_email_large_download_csv(request):
 @require_http_methods(["POST"])
 @action(detail=False)
 def download_all_queries_csv(request):
-    # get data from request (JSON encoded document with "queryState" in object/dict)
-    payload = json.loads(request.body)
-    queryState = payload.get('queryState', None)
-    queries = [parsed_query_from_dict(query) for query in queryState]
+    queries = parsed_query_state(request) # handles GET with qS=JSON
 
     # make background task to fetch each query and zip into file then send email
     download_all_queries_csv_task(queries, request)

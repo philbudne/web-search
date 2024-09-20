@@ -2,7 +2,7 @@
 import datetime as dt
 import json
 import time
-from typing import List, Dict, NamedTuple, Optional
+from typing import Callable, Dict, Generator, List, NamedTuple, Optional, Tuple
 
 # PyPI
 from django.apps import apps
@@ -67,7 +67,7 @@ def parse_date_str(date_str: str) -> dt.datetime:
         return dt.datetime.strptime(date_str, '%m/%d/%Y')
 
 
-def listify(input: str) -> list[str]:
+def listify(input: str) -> List[str]:
     if input:
         return input.split(',')
     return []
@@ -120,9 +120,33 @@ def parsed_query_from_dict(payload) -> ParsedQuery:
                        provider_name=provider_name, api_key=api_key,
                        base_url=base_url, caching=caching)
 
-def _get_api_key(provider: str) -> str | None:
+def _get_api_key(provider: str) -> Optional[str]:
     # no system-level API keys right now
     return None
+
+def parsed_query_state_and_params(request, qs_key="queryState") -> Tuple[List[ParsedQuery], Dict]:
+    """
+    this to handle views.send_email_large_download_csv (queries + email)
+    and the more usual case of just a set of queries
+    """
+    if request.method == 'POST':
+        params = json.loads(request.body)
+        queries = params.get(qs_key)
+    else:
+        params = request.GET
+        queries = json.loads(params.get("qS"))
+
+    pqs = [parsed_query_from_dict(q) for q in queries]
+    return (pqs, params)
+
+def parsed_query_state(request) -> List[ParsedQuery]:
+    """
+    return list of parsed queries from "queryState" (list of dicts).
+    Expects POST with JSON object with a "queryState" element (download-all-queries)
+    or GET with qs=JSON_STRING (many)
+    """
+    pqs, d = parsed_query_state_and_params(request)
+    return pqs
 
 def search_props_for_provider(provider, collections: List, sources: List, all_params: Dict) -> Dict:
     if provider == provider_name(PLATFORM_TWITTER, PLATFORM_SOURCE_TWITTER):
@@ -227,3 +251,27 @@ def filename_timestamp() -> str:
     used for CSV & ZIP filenames in both views.py and tasks.py
     """
     return time.strftime("%Y%m%d%H%M%S", time.localtime())
+
+def all_content_csv_generator(pqs: list[ParsedQuery], user_id, is_staff) -> tuple[str, Callable[[],Generator[list, None, None]]]:
+    """
+    returns base filename, and generator for rows from all queries.
+    used for both immediate CSV download (download_all_content_csv)
+    and emailed CSV (download_all_large_content_csv)
+    """
+    def data_generator() -> Generator[list, None, None]:
+        # phil: moved outside per-query loop (so headers appear once)
+        first_page = True
+        for pq in pqs:
+            provider = pq_provider(pq)
+            result = provider.all_items(f"({pq.query_str})", pq.start_date, pq.end_date, **pq.provider_props)
+            for page in result:
+                QuotaHistory.increment(user_id, is_staff, pq.provider_name)
+                if first_page:  # send back column names, which differ by platform
+                    yield sorted(page[0].keys())
+                    first_page = False
+                for story in page:
+                    yield [v for k, v in sorted(story.items())]
+
+    # generate filename using provider of last query (as before)
+    base_filename = "mc-{}-{}-content".format(pqs[-1].provider_name, filename_timestamp())
+    return (base_filename, data_generator)
