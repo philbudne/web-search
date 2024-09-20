@@ -33,7 +33,7 @@ export default function TotalAttentionEmailModal({
 
   // download button is hit but the count is less than 25k, no need to ask for an email it will download
   const handleClickOpen = () => {
-    if (totalCountOfQuery < document.settings.allContentCsvEmailMin) {
+    if (totalCountOfQuery < document.settings.allUrlsCsvEmailMin) {
       enqueueSnackbar('Downloading your data!', { variant: 'success' });
       handleDownloadRequest([querySlice]);
     } else if (!currentUserEmail) {
@@ -47,8 +47,8 @@ export default function TotalAttentionEmailModal({
   // if cancel button is hit, sendEmail will use the typed password
   const handleClose = () => {
     if (currentUserEmail) {
-      if (totalCountOfQuery >= document.settings.allContentCsvEmailMin &&
-	  totalCountOfQuery <= document.settings.allContentCsvEmailMax) {
+      if (totalCountOfQuery >= document.settings.allUrlsCsvEmailMin &&
+	  totalCountOfQuery <= document.settings.allUrlsCsvEmailMax) {
         sendTotalAttentionDataEmail({
           prepareQuery: prepareQueries([querySlice]),
           email: currentUserEmail,
@@ -69,8 +69,8 @@ export default function TotalAttentionEmailModal({
   // if submit button is hit, sentEmail will use the typed password
   const handleClick = async () => {
     if (emailModal.email) {
-      if (totalCountOfQuery >= document.settings.allContentCsvEmailMin &&
-	  totalCountOfQuery <= document.settings.allContentCsvEmailMax) {
+      if (totalCountOfQuery >= document.settings.allUrlsCsvEmailMin &&
+	  totalCountOfQuery <= document.settings.allUrlsCsvEmailMax) {
         sendTotalAttentionDataEmail({
           prepareQuery: prepareQueries([querySlice]),
           email: emailModal.email,

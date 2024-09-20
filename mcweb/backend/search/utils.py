@@ -12,7 +12,7 @@ from mc_providers import provider_by_name, provider_name, ContentProvider, \
     PLATFORM_SOURCE_WAYBACK_MACHINE, PLATFORM_ONLINE_NEWS
 
 # mcweb
-from settings import ALL_CONTENT_CSV_EMAIL_MAX, ALL_CONTENT_CSV_EMAIL_MIN, NEWS_SEARCH_API_URL
+from settings import ALL_URLS_CSV_EMAIL_MAX, ALL_URLS_CSV_EMAIL_MIN, NEWS_SEARCH_API_URL
 
 class ParsedQuery(NamedTuple):
     start_date: dt.datetime
