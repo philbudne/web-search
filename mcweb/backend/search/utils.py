@@ -129,28 +129,19 @@ def parsed_query_from_dict(payload) -> ParsedQuery:
                        provider_name=provider_name, api_key=api_key,
                        base_url=base_url, caching=caching)
 
-def parsed_query_state_and_params(request, qs_key="queryState") -> tuple[list[ParsedQuery], dict]:
-    """
-    this to handle views.send_email_large_download_csv (queries + email)
-    and the more usual case of just a set of queries
-    """
-    if request.method == 'POST':
-        params = json.loads(request.body)
-        queries = params.get(qs_key)
-    else:
-        params = request.GET
-        queries = json.loads(params.get("qS"))
-
-    pqs = [parsed_query_from_dict(q) for q in queries]
-    return (pqs, params)
-
 def parsed_query_state(request) -> list[ParsedQuery]:
     """
     return list of parsed queries from "queryState" (list of dicts).
     Expects POST with JSON object with a "queryState" element (download-all-queries)
     or GET with qs=JSON_STRING (many)
     """
-    pqs, params = parsed_query_state_and_params(request)
+    if request.method == 'POST':
+        payload = json.loads(request.body)
+        queries = payload.get("queryState")
+    else:
+        queries = json.loads(request.GET.get("qS"))
+
+    pqs = [parsed_query_from_dict(q) for q in queries]
     return pqs
 
 def _get_api_key(provider: str) -> str | None:

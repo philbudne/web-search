@@ -26,9 +26,16 @@ from util.csvwriter import CSVWriterHelper
 
 # mcweb/backend/search (local dir)
 from .utils import (
-    ParsedQuery, all_content_csv_basename, all_content_csv_generator,
-    filename_timestamp, parse_query, parse_query_params, parsed_query_state,
-    parsed_query_state_and_params, pq_provider, search_props_for_provider
+    ParsedQuery,
+    all_content_csv_basename,
+    all_content_csv_generator,
+    filename_timestamp,
+    parse_query,
+    parse_query_params,
+    parsed_query_from_dict,
+    parsed_query_state,
+    pq_provider,
+    search_props_for_provider
 )
 from .tasks import download_all_large_content_csv, download_all_queries_csv_task
 
@@ -335,14 +342,17 @@ def download_all_content_csv(request):
 @handle_provider_errors
 @require_http_methods(["POST"])
 def send_email_large_download_csv(request):
-    # get queries and email
-    pqs, payload = parsed_query_state_and_params(request, 'prepareQuery')
-    email = payload.get('email', None)
+    # get queryState and email
+    payload = json.loads(request.body)
+    queryState = payload.get('prepareQuery')
+    email = payload.get('email')
 
+    # TotalAttentionEmailModal.jsx does range check.
     # NOTE: download_all_content_csv doesn't check count!
-    # TotalAttentionEmailModal.jsx does range check too
+    # applying range check to sum of all queries!
     total = 0
-    for pq in pqs:
+    for query in queryState:
+        pq = parsed_query_from_dict(query)
         provider = pq_provider(pq)
         try:
             total += provider.count(f"({pq.query_str})", pq.start_date, pq.end_date, **pq.provider_props)
@@ -350,14 +360,16 @@ def send_email_large_download_csv(request):
             # said "continuing anyway", but didn't!
             return error_response("Can't count results for download in {}".format(pq.provider_name))
 
-    # phil: moved outside loop (was looping for all queries, AND sending all queries in email)
+    # phil: moved outside loop (was looping for all queries, AND sending all queries in email)!
     # was sending empty response regardless
     if total >= ALL_URLS_CSV_EMAIL_MIN and total <= ALL_URLS_CSV_EMAIL_MAX:
-        response = download_all_large_content_csv(pqs, request.user.id, request.user.is_staff, email)
+        # task arguments must be JSONifiable, so pass queryState instead of pqs
+        response = download_all_large_content_csv(queryState, request.user.id, request.user.is_staff, email)
         return HttpResponse(json.dumps(response, default=str),
                             content_type="application/json", status=200)
-    return error_response("Total {} not between {} and {}".format(
-        total, ALL_URLS_CSV_EMAIL_MIN, ALL_URLS_CSV_EMAIL_MAX))
+    else:
+        return error_response("Total {} not between {} and {}".format(
+            total, ALL_URLS_CSV_EMAIL_MIN, ALL_URLS_CSV_EMAIL_MAX))
 
 @login_required(redirect_field_name='/auth/login')
 @require_http_methods(["POST"])

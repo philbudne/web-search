@@ -28,7 +28,8 @@ logger = logging.getLogger(__name__)
 
 # called from /api/search/send-email-large-download-csv endpoint
 # by frontend sendTotalAttentionDataEmail
-def download_all_large_content_csv(parsed_queries: list[ParsedQuery], user_id: int, user_isStaff: bool, email: str):
+def download_all_large_content_csv(query_state: list[dict], user_id: int, user_isStaff: bool, email: str):
+    parsed_queries = [parsed_query_from_dict(q) for q in query_state]
     task = _download_all_large_content_csv(parsed_queries, user_id, user_isStaff, email)
     return {'task': _return_task(task)}
 
