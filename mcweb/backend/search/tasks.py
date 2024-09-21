@@ -13,8 +13,15 @@ from io import StringIO, BytesIO
 import mc_providers
 from background_task import background
 
-# mcweb/backend/search (local directorty)
-from .utils import ParsedQuery, all_content_csv_basename, all_content_csv_generator, filename_timestamp, pq_provider
+# mcweb/backend/search (local directory)
+from .utils import (
+    ParsedQuery,
+    all_content_csv_basename,
+    all_content_csv_generator,
+    filename_timestamp,
+    parsed_query_from_dict,
+    pq_provider
+)
 
 # mcweb/backend
 from ..users.models import QuotaHistory
