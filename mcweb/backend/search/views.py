@@ -2,7 +2,7 @@ import csv
 import datetime as dt
 import json
 import logging
-from typing import Optional
+from typing import List, Optional
 
 # PyPI
 import mc_providers
