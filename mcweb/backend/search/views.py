@@ -2,7 +2,6 @@ import csv
 import datetime as dt
 import json
 import logging
-from typing import List, Optional
 
 # PyPI
 import mc_providers
@@ -48,7 +47,7 @@ session.mount('http://', adapter)
 session.mount('https://', adapter)
 
 
-def error_response(msg: str, response_type: Optional[HttpResponse]) -> HttpResponse:
+def error_response(msg: str, response_type: HttpResponse | None) -> HttpResponse:
     ResponseClass = response_type or HttpResponseBadRequest
     return ResponseClass(json.dumps(dict(
         status="error",
@@ -66,7 +65,7 @@ def parse_date_str(date_str: str) -> dt.datetime:
         return dt.datetime.strptime(date_str, '%m/%d/%Y')
 
 
-def listify(input: str) -> List[str]:
+def listify(input: str) -> list[str]:
     if input:
         return input.split(',')
     return []
@@ -123,7 +122,7 @@ def parsed_query_from_dict(payload) -> ParsedQuery:
                        provider_name=provider_name, api_key=api_key,
                        base_url=base_url, caching=caching)
 
-def parsed_query_state_and_params(request, qs_key="queryState") -> Tuple[List[ParsedQuery], Dict]:
+def parsed_query_state_and_params(request, qs_key="queryState") -> tuple[list[ParsedQuery], dict]:
     """
     this to handle views.send_email_large_download_csv (queries + email)
     and the more usual case of just a set of queries
@@ -138,7 +137,7 @@ def parsed_query_state_and_params(request, qs_key="queryState") -> Tuple[List[Pa
     pqs = [parsed_query_from_dict(q) for q in queries]
     return (pqs, params)
 
-def parsed_query_state(request) -> List[ParsedQuery]:
+def parsed_query_state(request) -> list[ParsedQuery]:
     """
     return list of parsed queries from "queryState" (list of dicts).
     Expects POST with JSON object with a "queryState" element (download-all-queries)
