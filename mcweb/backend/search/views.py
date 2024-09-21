@@ -1,13 +1,12 @@
+import csv
+import datetime as dt
 import json
 import logging
-import csv
-import time
-import collections
-import requests
 from typing import Optional
 
 # PyPI
 import mc_providers
+import requests
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseBadRequest, HttpResponseForbidden, HttpResponse
 from django.views.decorators.http import require_http_methods
