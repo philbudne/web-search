@@ -25,7 +25,7 @@ from util.cache import cache_by_kwargs, mc_providers_cacher
 from util.csvwriter import CSVWriterHelper
 
 # mcweb/backend/search (local dir)
-from .utils import ParsedQuery, all_content_csv_basename, all_content_csv_generator, filename_timestamp, pq_provider
+from .utils import ParsedQuery, all_content_csv_basename, all_content_csv_generator, filename_timestamp, pq_provider, search_props_for_provider
 from .tasks import download_all_large_content_csv, download_all_queries_csv_task
 
 # mcweb/backend/users
