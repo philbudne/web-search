@@ -19,6 +19,9 @@ from rest_framework.decorators import api_view, action, authentication_classes, 
 from rest_framework.permissions import IsAuthenticated
 from urllib3.util.retry import Retry
 
+# mcweb
+from settings import ALL_URLS_CSV_EMAIL_MAX, ALL_URLS_CSV_EMAIL_MIN
+
 # mcweb/util
 from util.cache import cache_by_kwargs, mc_providers_cacher
 from util.csvwriter import CSVWriterHelper
@@ -427,25 +430,25 @@ def send_email_large_download_csv(request):
     pqs, payload = parsed_query_state_and_params(request, 'prepareQuery')
     email = payload.get('email', None)
 
-    # follows similiar logic from download_all_content_csv, get information and send to tasks
+    # NOTE: download_all_content_csv doesn't check count!
+    # TotalAttentionEmailModal.jsx does range check too
     total = 0
     for pq in pqs:
         provider = pq_provider(pq)
         try:
             total += provider.count(f"({pq.query_str})", pq.start_date, pq.end_date, **pq.provider_props)
-            # NOTE! The same limit numbers appear (twice) in
-            # mcweb/frontend/src/features/search/util/TotalAttentionEmailModal.jsx
-            # gives no indication that count wasn't in range!!!
-            if count >= 25000 and count <= 200000:
-                # WHOA! this calls download_all_large_content_csv with the full list of (unparsed) queries
-                # for each query in the list?! maybe desire is to pass list with single query????
-
-                download_all_large_content_csv(pqs, request.user.id, request.user.is_staff, email)
         except UnsupportedOperationException:
-            # says "continuing anyway", but doesn't?!
-            return error_response("Can't count results for download in {}... continuing anyway".format(pq.provider_name))
-    return HttpResponse(content_type="application/json", status=200)
+            # said "continuing anyway", but didn't!
+            return error_response("Can't count results for download in {}".format(pq.provider_name))
 
+    # phil: moved outside loop (was looping for all queries, AND sending all queries in email)
+    # was sending empty response regardless
+    if total >= ALL_URLS_CSV_EMAIL_MIN and total <= ALL_URLS_CSV_EMAIL_MAX:
+        response = download_all_large_content_csv(pqs, request.user.id, request.user.is_staff, email)
+        return HttpResponse(json.dumps(response, default=str),
+                            content_type="application/json", status=200)
+    return error_response("Total {} not between {} and {}".format(
+        total, ALL_URLS_CSV_EMAIL_MIN, ALL_URLS_CSV_EMAIL_MAX))
 
 @login_required(redirect_field_name='/auth/login')
 @require_http_methods(["POST"])
