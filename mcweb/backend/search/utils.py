@@ -14,6 +14,9 @@ from mc_providers import provider_by_name, provider_name, ContentProvider, \
 # mcweb
 from settings import ALL_URLS_CSV_EMAIL_MAX, ALL_URLS_CSV_EMAIL_MIN, NEWS_SEARCH_API_URL
 
+# mcweb/backend/users
+from ..users.models import QuotaHistory
+
 class ParsedQuery(NamedTuple):
     start_date: dt.datetime
     end_date: dt.datetime
