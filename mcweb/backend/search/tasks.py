@@ -76,7 +76,7 @@ def _download_all_large_content_csv(queryState: list[dict], user_id: int, user_i
     csvwriter = csv.writer(csvfile)
 
     # Generate and write data to the CSV
-    csvwriter.writerow(data_generator())
+    csvwriter.writerows(data_generator())
 
     # Create an in-memory byte stream, and wrap ZipFile object around it
     zipstream = BytesIO()
