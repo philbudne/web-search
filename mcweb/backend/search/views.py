@@ -25,7 +25,11 @@ from util.cache import cache_by_kwargs, mc_providers_cacher
 from util.csvwriter import CSVWriterHelper
 
 # mcweb/backend/search (local dir)
-from .utils import ParsedQuery, all_content_csv_basename, all_content_csv_generator, filename_timestamp, pq_provider, search_props_for_provider
+from .utils import (
+    ParsedQuery, all_content_csv_basename, all_content_csv_generator,
+    filename_timestamp, parse_query, parse_query_params, pq_provider,
+    search_props_for_provider
+)
 from .tasks import download_all_large_content_csv, download_all_queries_csv_task
 
 # mcweb/backend/users
@@ -40,12 +44,12 @@ logger = logging.getLogger(__name__)
 # enable caching for mc_providers results (explicitly referencing pkg for clarity)
 mc_providers.cache.CachingManager.cache_function = mc_providers_cacher
 
-session = requests.Session()
-retry = Retry(connect=3, backoff_factor=0.5)
-adapter = HTTPAdapter(max_retries=retry)
-session.mount('http://', adapter)
-session.mount('https://', adapter)
-
+# not used in this file?
+#session = requests.Session()
+#retry = Retry(connect=3, backoff_factor=0.5)
+#adapter = HTTPAdapter(max_retries=retry)
+#session.mount('http://', adapter)
+#session.mount('https://', adapter)
 
 def error_response(msg: str, response_type: HttpResponse | None) -> HttpResponse:
     ResponseClass = response_type or HttpResponseBadRequest
@@ -53,98 +57,6 @@ def error_response(msg: str, response_type: HttpResponse | None) -> HttpResponse
         status="error",
         note=msg,
     )))
-
-def parse_date_str(date_str: str) -> dt.datetime:
-    """
-    accept both YYYY-MM-DD and MM/DD/YYYY
-    (was accepting former in JSON and latter in GET/query-str)
-    """
-    if '-' in date_str:
-        return dt.datetime.strptime(date_str, '%Y-%m-%d')
-    else:
-        return dt.datetime.strptime(date_str, '%m/%d/%Y')
-
-
-def listify(input: str) -> list[str]:
-    if input:
-        return input.split(',')
-    return []
-
-def _get_api_key(provider: str) -> str | None:
-    # no system-level API keys right now
-    return None
-
-def parse_query(request) -> ParsedQuery:
-    if request.method == 'POST':
-        payload = json.loads(request.body).get("queryObject")
-        return parsed_query_from_dict(payload)
-
-    provider_name = request.GET.get("p", 'onlinenews-mediacloud')
-    query_str = request.GET.get("q", "*")
-    collections = listify(request.GET.get("cs", None))
-    sources = listify(request.GET.get("ss", None))
-    provider_props = search_props_for_provider(
-        provider_name,
-        collections,
-        sources,
-        request.GET
-    )
-    start_date = parse_date_str(request.GET.get("start", "2010-01-01"))
-    end_date = parse_date_str(request.GET.get("end", "2030-01-01"))
-    api_key = _get_api_key(provider_name)
-    base_url = _BASE_URL.get(provider_name)
-
-    # caching is enabled unless cache is passed ONCE with "f" or "0" as value
-    caching = request.GET.get("cache", "1") not in ["f", "0"]
-
-    return ParsedQuery(start_date=start_date, end_date=end_date,
-                       query_str=query_str, provider_props=provider_props,
-                       provider_name=provider_name, api_key=api_key,
-                       base_url=base_url, caching=caching)
-
-
-def parsed_query_from_dict(payload) -> ParsedQuery:
-    """
-    Takes a queryObject dict, returns ParsedQuery
-    """
-    provider_name = payload["platform"]
-    query_str = payload["query"]
-    collections = payload["collections"]
-    sources = payload["sources"]
-    provider_props = search_props_for_provider(provider_name, collections, sources, payload)
-    start_date = parse_date_str(payload["startDate"])
-    end_date = parse_date_str(payload["endDate"])
-    api_key = _get_api_key(provider_name)
-    base_url = _BASE_URL.get(provider_name)
-    caching = payload.get("caching", True)
-    return ParsedQuery(start_date=start_date, end_date=end_date,
-                       query_str=query_str, provider_props=provider_props,
-                       provider_name=provider_name, api_key=api_key,
-                       base_url=base_url, caching=caching)
-
-def parsed_query_state_and_params(request, qs_key="queryState") -> tuple[list[ParsedQuery], dict]:
-    """
-    this to handle views.send_email_large_download_csv (queries + email)
-    and the more usual case of just a set of queries
-    """
-    if request.method == 'POST':
-        params = json.loads(request.body)
-        queries = params.get(qs_key)
-    else:
-        params = request.GET
-        queries = json.loads(params.get("qS"))
-
-    pqs = [parsed_query_from_dict(q) for q in queries]
-    return (pqs, params)
-
-def parsed_query_state(request) -> list[ParsedQuery]:
-    """
-    return list of parsed queries from "queryState" (list of dicts).
-    Expects POST with JSON object with a "queryState" element (download-all-queries)
-    or GET with qs=JSON_STRING (many)
-    """
-    pqs, params = parsed_query_state_and_params(request)
-    return pqs
 
 def handle_provider_errors(func):
     """
@@ -225,13 +137,12 @@ def sample(request):
 @permission_classes([IsAuthenticated])
 # @cache_by_kwargs()
 def story_detail(request):
-    pq = parse_query(request)
-    story_id = request.GET.get("storyId")
-    platform = request.GET.get("platform")
+    pq, params = parse_query_params(request) # unlikely to handle POST!
+    story_id = params.get("storyId")
+    platform = params.get("platform")
     provider = pq_provider(pq, platform)
     story_details = provider.item(story_id)
-    # PB: uses "platform" to create provider, but pq.provider_name for QuotaHistory??
-    QuotaHistory.increment(request.user.id, request.user.is_staff, pq.provider_name)
+    QuotaHistory.increment(request.user.id, request.user.is_staff, provider)
     return HttpResponse(json.dumps({"story": story_details}, default=str), content_type="application/json",
                         status=200)
 
