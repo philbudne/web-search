@@ -363,7 +363,7 @@ def send_email_large_download_csv(request):
     # phil: moved outside loop (was looping for all queries, AND sending all queries in email)!
     # was sending empty response regardless
     if total >= ALL_URLS_CSV_EMAIL_MIN and total <= ALL_URLS_CSV_EMAIL_MAX:
-        # task arguments must be JSONifiable, so pass queryState instead of pqs
+        # task arguments must be JSONifiable, so must pass queryState instead of pqs
         response = download_all_large_content_csv(queryState, request.user.id, request.user.is_staff, email)
         return HttpResponse(json.dumps(response, default=str),
                             content_type="application/json", status=200)

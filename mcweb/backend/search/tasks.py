@@ -35,13 +35,13 @@ logger = logging.getLogger(__name__)
 
 # called from /api/search/send-email-large-download-csv endpoint
 # by frontend sendTotalAttentionDataEmail
-def download_all_large_content_csv(query_state: list[dict], user_id: int, user_isStaff: bool, email: str):
-    parsed_queries = [parsed_query_from_dict(q) for q in query_state]
+def download_all_large_content_csv(queryState: list[dict], user_id: int, user_isStaff: bool, email: str):
     task = _download_all_large_content_csv(parsed_queries, user_id, user_isStaff, email)
     return {'task': _return_task(task)}
 
 @background(remove_existing_tasks=True)
-def _download_all_large_content_csv(parsed_queries: list[ParsedQuery], user_id: int, user_isStaff: bool, email: str):
+def _download_all_large_content_csv(queryState: list[dict], user_id: int, user_isStaff: bool, email: str):
+    parsed_queries = [parsed_query_from_dict(q) for q in query_state]
     # code from: https://stackoverflow.com/questions/17584550/attach-generated-csv-file-to-email-and-send-with-django
     # Phil: maybe catch exception, and send email?
 
