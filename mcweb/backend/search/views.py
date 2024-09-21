@@ -70,7 +70,7 @@ def listify(input: str) -> list[str]:
         return input.split(',')
     return []
 
-def _get_api_key(provider: str) -> Optional[str]:
+def _get_api_key(provider: str) -> str | None:
     # no system-level API keys right now
     return None
 
