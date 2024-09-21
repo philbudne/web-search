@@ -225,7 +225,7 @@ def download_languages_csv(request):
         logger.exception(e)
         return error_response(str(e), HttpResponseBadRequest)
     QuotaHistory.increment(request.user.id, request.user.is_staff, pq.provider_name, 2)
-    filename = "mc-{}-{}-top-languages".format(pq.provider_name, _ilename_timestamp())
+    filename = "mc-{}-{}-top-languages".format(pq.provider_name, filename_timestamp())
     response = HttpResponse(
         content_type='text/csv',
         headers={'Content-Disposition': f"attachment; filename={filename}.csv"},
