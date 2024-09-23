@@ -52,7 +52,9 @@ def pq_provider(pq: ParsedQuery, platform: Optional[str] = None) -> ContentProvi
     take parsed query, return mc_providers ContentProvider.
     (one place to pass new things to mc_providers)
     """
-    return provider_by_name(platform or pq.provider_name, pq.api_key, pq.base_url, pq.caching)
+    # disabled until new mc-providers available!
+    #return provider_by_name(platform or pq.provider_name, pq.api_key, pq.base_url, caching=pq.caching)
+    return provider_by_name(platform or pq.provider_name, pq.api_key, pq.base_url)
 
 def parse_date_str(date_str: str) -> dt.datetime:
     """
