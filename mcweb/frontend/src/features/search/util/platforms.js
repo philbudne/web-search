@@ -24,7 +24,7 @@ const { earliestAvailableDate } = document.settings;
 export const latestAllowedEndDate = (provider) => {
   const today = dayjs();
   if (provider === PROVIDER_NEWS_WAYBACK_MACHINE) return today.subtract('4', 'day');
-  if (provider === PROVIDER_NEWS_MEDIA_CLOUD) return today.subtract('1', 'day');
+  // allowing today for PROVIDER_NEWS_MEDIA_CLOUD
   return today;
 };
 
