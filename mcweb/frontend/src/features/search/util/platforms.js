@@ -1,5 +1,4 @@
 import dayjs from 'dayjs';
-import getEarliestAvailableDate from './dateHelpers';
 // keep in sync with mcweb/frontend/views.py
 export const PLATFORM_ONLINE_NEWS = 'onlinenews';
 
@@ -21,7 +20,7 @@ export const PROVIDER_NEWS_MEDIA_CLOUD = providerName(
 
 const { earliestAvailableDate } = document.settings;
 
-// the latest allowed end date for the type of platform
+// the latest allowed end date for the type of platform as dayjs
 export const latestAllowedEndDate = (provider) => {
   const today = dayjs();
   if (provider === PROVIDER_NEWS_WAYBACK_MACHINE) return today.subtract('4', 'day');
@@ -29,10 +28,10 @@ export const latestAllowedEndDate = (provider) => {
   return today;
 };
 
-// the earliest starting date for the type of platform
+// the earliest starting date for the type of platform as dayjs
 export const earliestAllowedStartDate = (provider) => {
   if (provider === PROVIDER_NEWS_WAYBACK_MACHINE) return dayjs('2022-08-01');
-  return getEarliestAvailableDate(earliestAvailableDate);
+  return dayjs(earliestAvailableDate);
 };
 
 export const defaultPlatformProvider = (platform) => {

@@ -14,33 +14,32 @@ import { earliestAllowedStartDate, latestAllowedEndDate } from '../util/platform
 import validateDate from '../util/dateValidation';
 import DefaultDates from './DefaultDates';
 import isQueryStateEmpty from '../util/isQueryStateEmpty';
-import getEarliestAvailableDate from '../util/dateHelpers';
 
 export default function SearchDatePicker({ queryIndex }) {
   const dispatch = useDispatch();
   const { enqueueSnackbar } = useSnackbar();
-  const { earliestAvailableDate } = document.settings;
   const {
     platform, startDate, endDate, isFromDateValid, isToDateValid,
   } = useSelector((state) => state.query[queryIndex]);
 
   const queryState = useSelector((state) => state.query);
 
-  // the minimum date off platform (From Date Picker)
-  const fromDateMin = dayjs(earliestAllowedStartDate(platform)).format('MM/DD/YYYY');
-  // the maximum date based off platform (From Date Picker)
-  const fromDateMax = dayjs(latestAllowedEndDate(platform)).format('MM/DD/YYYY');
-  // the minumum date off platform (To Date Picker)
-  const toDateMin = dayjs(earliestAllowedStartDate(platform)).format('MM/DD/YYYY');
-  // the maximum date off platform (To Date Picker)
-  const toDateMax = dayjs(latestAllowedEndDate(platform)).format('MM/DD/YYYY');
+  // US format date (use "L" format w/ dayjs LocalizedFormat?)
+  const dateFormat = 'MM/DD/YYYY';
+
+  // the minimum/maximum dates off platform for both From and To dates
+  const minDJS = earliestAllowedStartDate(platform); // dayjs
+  const maxDJS = latestAllowedEndDate(platform);     // dayjs
+  const minDate = minDJS.toDate(); // Date (not str! for picker)
+  const maxDate = maxDJS.toDate(); // Date (not str! for picker)
 
   // handler for the fromDate MUI DatePicker
   const handleChangeFromDate = (newValue) => {
-    if (validateDate(dayjs(newValue), dayjs(fromDateMin), dayjs(fromDateMax))) {
+    const newDJS = dayjs(newValue);
+    if (validateDate(newDJS, minDJS, maxDJS)) {
       // if the fromDate is valid, we are going to make this change in state and set the isFromDateValid to true
       dispatch(setQueryProperty({ isFromDateValid: true, queryIndex, property: 'isFromDateValid' }));
-      dispatch(setQueryProperty({ startDate: dayjs(newValue).format('MM/DD/YYYY'), queryIndex, property: 'startDate' }));
+      dispatch(setQueryProperty({ startDate: newDJS.format(dateFormat), queryIndex, property: 'startDate' }));
     } else {
       // we do not save the invalid date, if a user goes onto another tab, the previously valid date will be presented
       // if the date is invalid, we are going to set isToDateValid to false because the date provided is not valid
@@ -50,10 +49,11 @@ export default function SearchDatePicker({ queryIndex }) {
 
   // handler for the toDate MUI DatePicker
   const handleChangeToDate = (newValue) => {
-    if (validateDate(dayjs(newValue), dayjs(toDateMin), dayjs(toDateMax))) {
+    const newDJS = dayjs(newValue);
+    if (validateDate(newDJS, minDJS, maxDJS)) {
       // if the toDate is valid, we are going to make this change in state and set the isToDateValid to true
       dispatch(setQueryProperty({ isToDateValid: true, queryIndex, property: 'isToDateValid' }));
-      dispatch(setQueryProperty({ endDate: dayjs(newValue).format('MM/DD/YYYY'), queryIndex, property: 'endDate' }));
+      dispatch(setQueryProperty({ endDate: newDJS.format(dateFormat), queryIndex, property: 'endDate' }));
     } else {
       // we do not save the invalid date, if a user goes onto another tab, the previously valid date will be presented
       // if the date is invalid, we are going to set isToDateValid to false because the date provided is not valid
@@ -65,17 +65,17 @@ export default function SearchDatePicker({ queryIndex }) {
   useEffect(() => {
     // if the queries are empty, change the end date to the latest allowed end date per the platform
     if (isQueryStateEmpty(queryState)) {
-      handleChangeToDate(latestAllowedEndDate(platform));
+      handleChangeToDate(maxDJS);
     }
 
     // if the endDate is after than the latest allowed end date, change the end date to the latest allowed date
-    if (dayjs(endDate) > dayjs(toDateMax)) {
-      handleChangeToDate(latestAllowedEndDate(platform));
+    if (dayjs(endDate) > maxDJS) {
+      handleChangeToDate(maxDJS);
       enqueueSnackbar('We changed your end date to match this platform limit', { variant: 'warning' });
     }
     // if the endDate is earlier than the earliest allowed start date, change the start date to the earliest allowed date
-    if (dayjs(startDate) < dayjs(fromDateMin)) {
-      handleChangeFromDate(earliestAllowedStartDate(platform));
+    if (dayjs(startDate) < minDJS) {
+      handleChangeFromDate(minDJS);
       enqueueSnackbar('We changed your start date to match this platform limit', { variant: 'warning' });
     }
     // we don't save invalid dates, so going into another tab would leave these set to false and a correct date
@@ -87,7 +87,7 @@ export default function SearchDatePicker({ queryIndex }) {
     <>
       <Alert severity="warning">
         {/* eslint-disable-next-line react/jsx-one-expression-per-line */}
-        Reingest of historical data in progress. Search results available from present back to {getEarliestAvailableDate(earliestAvailableDate)}
+        Reingest of historical data in progress. Search results available from present back to {minDJS.format(dateFormat)}
       </Alert>
       <div className="date-picker-wrapper local-provider">
         <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -101,8 +101,8 @@ export default function SearchDatePicker({ queryIndex }) {
               onChange={handleChangeFromDate}
               disableFuture
               disableHighlightToday
-              minDate={dayjs(fromDateMin).toDate()}
-              maxDate={dayjs(fromDateMax).toDate()}
+              minDate={minDate}
+              maxDate={maxDate}
               renderInput={(params) => <TextField {...params} />}
             />
           </div>
@@ -116,8 +116,8 @@ export default function SearchDatePicker({ queryIndex }) {
               onChange={handleChangeToDate}
               disableFuture
               disableHighlightToday
-              minDate={dayjs(toDateMin).toDate()}
-              maxDate={dayjs(toDateMax).toDate()}
+              minDate={minDate}
+              maxDate={maxDate}
               renderInput={(params) => <TextField {...params} />}
             />
           </div>
