@@ -10,7 +10,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs from 'dayjs';
 import { useSnackbar } from 'notistack';
 import { setQueryProperty } from './querySlice';
-import { earliestAllowedStartDate, latestAllowedEndDate } from '../util/platforms';
+import { earliestAllowedStartDate, latestAllowedEndDate, PROVIDER_NEWS_MEDIA_CLOUD } from '../util/platforms';
 import validateDate from '../util/dateValidation';
 import DefaultDates from './DefaultDates';
 import isQueryStateEmpty from '../util/isQueryStateEmpty';
@@ -63,6 +63,13 @@ export default function SearchDatePicker({ queryIndex }) {
 
   // if the platform changes, we want to update the validity of the dates
   useEffect(() => {
+    const {
+      collections,
+      sources,
+      advanced,
+      platform,
+    } = queryState;
+
     // if the queries are empty, change the end date to the latest allowed end date per the platform
     if (isQueryStateEmpty(queryState)) {
       handleChangeToDate(maxDJS);
@@ -85,10 +92,12 @@ export default function SearchDatePicker({ queryIndex }) {
 
   return (
     <>
-      <Alert severity="warning">
-        {/* eslint-disable-next-line react/jsx-one-expression-per-line */}
-        Reingest of historical data in progress. Search results available from present back to {minDJS.format(dateFormat)}
-      </Alert>
+      {platform === PROVIDER_NEWS_MEDIA_CLOUD && (
+        <Alert severity="warning">
+          {/* eslint-disable-next-line react/jsx-one-expression-per-line */}
+          Reingest of historical data in progress. Search results available from present back to {minDJS.format(dateFormat)}
+        </Alert>
+      )}
       <div className="date-picker-wrapper local-provider">
         <LocalizationProvider dateAdapter={AdapterDateFns}>
           <div className="date-accuracy-alert">
