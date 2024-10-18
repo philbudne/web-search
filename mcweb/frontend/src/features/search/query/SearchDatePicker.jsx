@@ -16,6 +16,9 @@ import DefaultDates from './DefaultDates';
 import isQueryStateEmpty from '../util/isQueryStateEmpty';
 
 export default function SearchDatePicker({ queryIndex }) {
+  // US format date (use "L" format w/ dayjs LocalizedFormat?)
+  const dateFormat = 'MM/DD/YYYY';
+
   const dispatch = useDispatch();
   const { enqueueSnackbar } = useSnackbar();
   const {
@@ -24,10 +27,8 @@ export default function SearchDatePicker({ queryIndex }) {
 
   const queryState = useSelector((state) => state.query);
 
-  // US format date (use "L" format w/ dayjs LocalizedFormat?)
-  const dateFormat = 'MM/DD/YYYY';
-
   // the minimum/maximum dates off platform for both From and To dates
+  // XXX need to execute this when platform changes???
   const minDJS = earliestAllowedStartDate(platform); // dayjs
   const maxDJS = latestAllowedEndDate(platform);     // dayjs
   const minDate = minDJS.toDate(); // Date (not str! for picker)
