@@ -32,7 +32,6 @@ if _EARLIEST_AVAILABLE_DATE.isdigit(): # all digits?
 
 @ensure_csrf_cookie
 def index(request):
-
     # the main entry point for the web app - it just renders the index HTML file to load all the JS
     return render(request, 'frontend/index.html', dict(
         version=VERSION,
