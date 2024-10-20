@@ -18,7 +18,7 @@ export const PROVIDER_NEWS_MEDIA_CLOUD = providerName(
   PLATFORM_SOURCE_MEDIA_CLOUD,
 );
 
-const { earliestAvailableDate } = document.settings;
+const { earliestAvailableDate } = document.settings; // MC earliest date
 
 // the latest allowed end date for the type of platform as dayjs
 export const latestAllowedEndDate = (provider) => {
