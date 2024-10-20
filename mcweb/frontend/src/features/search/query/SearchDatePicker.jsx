@@ -27,12 +27,10 @@ export default function SearchDatePicker({ queryIndex }) {
 
   const queryState = useSelector((state) => state.query);
 
-  // the minimum/maximum dates off platform for both From and To dates
-  // XXX need to execute this when platform changes???
+  // the minimum/maximum dates based on platform for both From and To dates
+  // XXX does this get reexcuted when platform changes???
   const minDJS = earliestAllowedStartDate(platform); // dayjs
   const maxDJS = latestAllowedEndDate(platform);     // dayjs
-  const minDate = minDJS.toDate(); // Date (not str! for picker)
-  const maxDate = maxDJS.toDate(); // Date (not str! for picker)
 
   // handler for the fromDate MUI DatePicker
   const handleChangeFromDate = (newValue) => {
@@ -111,8 +109,8 @@ export default function SearchDatePicker({ queryIndex }) {
               onChange={handleChangeFromDate}
               disableFuture
               disableHighlightToday
-              minDate={minDate}
-              maxDate={maxDate}
+              minDate={minDJS.toDate()}
+              maxDate={maxDJS.toDate()}
               renderInput={(params) => <TextField {...params} />}
             />
           </div>
@@ -126,8 +124,8 @@ export default function SearchDatePicker({ queryIndex }) {
               onChange={handleChangeToDate}
               disableFuture
               disableHighlightToday
-              minDate={minDate}
-              maxDate={maxDate}
+              minDate={minDJS.toDate()}
+              maxDate={maxDJS.toDate()}
               renderInput={(params) => <TextField {...params} />}
             />
           </div>
