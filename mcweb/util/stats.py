@@ -54,6 +54,9 @@ class Stats:
         # XXX actual timing call here
 
     def wrap(self, func):
+        return func
+
+    def wrap2(self, func):
         """
         decorator for timing/stats
         needs to be after any decorators
@@ -67,12 +70,10 @@ class Stats:
         function nesting here, and for no immediate benefit.
         """
         # if this fires, a decorator after this one didn't preserve __name__
-        """
         assert func.__name__ not in ["view", "decorator", "_handler"]
 
         @wraps(func)
         def decorator(request):
-            """
             NOTE! would like to count by (labeled) status code, but this
             decorator needs to be early to get intact __name__, 
             and decorators called after may transmute exceptions into
@@ -85,5 +86,3 @@ class Stats:
                 self.count("success", func.__name__) # gives rate
             return ret
         return decorator
-        """
-        return func
