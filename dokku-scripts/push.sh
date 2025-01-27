@@ -240,7 +240,10 @@ echo making dokku config...
 
 # override ALLOWED_HOSTS with value from common.sh
 # (used to set app domains in instance.sh)
-CONFIG_EXTRAS="-S ALLOWED_HOSTS=$ALLOWED_HOSTS"
+# and have gunicorn send stats to statsd/graphite/grafana
+STATSD_HOST=tarbell.angwin:8125
+STATSD_PREFIX=mc.$INSTANCE.web-search
+CONFIG_EXTRAS="-S ALLOWED_HOSTS=$ALLOWED_HOSTS -S GUNICORN_CMD_ARGS='--statsd-host $STATSD_HOST --statsd-prefix $STATSD_PREFIX'"
 
 case $BRANCH in
 prod|staging)
