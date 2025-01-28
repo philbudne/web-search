@@ -92,7 +92,7 @@ env = environ.Env(      # @@CONFIGURATION@@ definitions (datatype, default value
     SENTRY_PY_PROFILES_RATE=(float, 1.0), # fraction 0 to 1.0
     SENTRY_PY_TRACES_RATE=(float, 1.0),  # fraction 0 to 1.0
     STATSD_HOST=(str, ""),
-    STATSD_REALM=(str, ""),
+    STATSD_PREFIX=(str, ""),
     SYSTEM_ALERT=(str,None),
 )
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))

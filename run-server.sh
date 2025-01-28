@@ -1,6 +1,5 @@
 #!/bin/sh
-if [ "x$STATSD_REALM" != x -a "x$STATSD_HOST" != x ]; then
-    STATSD_PREFIX=mc.$STATSD_REALM.web-search
+if [ "x$STATSD_PREFIX" != x -a "x$STATSD_HOST" != x ]; then
     # without port gunicorn treats host as a unix-domain socket!
     EXTRAS="--statsd-host $STATSD_HOST:8125 --statsd-prefix $STATSD_PREFIX"
 fi
