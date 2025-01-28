@@ -18,8 +18,6 @@ PUBLIC_SERVER=tarbell
 # service name within public domain
 PUBLIC_NAME=search
 
-STATSD_HOST=tarbell.angwin:8125
-
 FQDN=$(hostname -f | tr A-Z a-z)
 HOST=$(hostname -s)
 

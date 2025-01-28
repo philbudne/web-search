@@ -242,13 +242,6 @@ echo making dokku config...
 # (used to set app domains in instance.sh)
 CONFIG_EXTRAS="-S ALLOWED_HOSTS=$ALLOWED_HOSTS"
 
-# have gunicorn send stats to statsd/graphite/grafana
-# if STATSD_HOST set in common.sh
-if [ "x$STATSD_HOST" != x ]; then
-    STATSD_PREFIX=mc.$INSTANCE.web-search
-    CONFIG_EXTRAS="$CONFIG_EXTRAS -S STATSD_HOST=$STATSD_HOST -S STATSD_PREFIX=$STATSD_PREFIX"
-fi
-
 case $BRANCH in
 prod|staging)
     # always do fresh clone of config repo main branch
