@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 # PyPI:
 import mcmetadata.urls as urls
 from django.contrib.auth.models import User
-from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.indexes import GinIndex, GistIndex
 from django.contrib.postgres.search import SearchVectorField
 from django.db import models
 
@@ -79,7 +79,11 @@ class Source(models.Model):
             # useful for search filtering
             models.Index(fields=['platform'], name='source platform'),
             # for keyword search
-            GinIndex(fields=['search_vector'], name='search_vector_gin_index')
+            GinIndex(fields=['search_vector'], name='search_vector_gin_index'),
+            # trying trigrams for search
+            # (GIN faster to search, slower to build than GiST)
+            GistIndex(fields=['name'], name='name_trigram_gist_index'),
+            GistIndex(fields=['label'], name='label_trigram_gist_index'),
         ]
         constraints = [
             models.UniqueConstraint(fields=('name', 'platform', 'url_search_string'),
