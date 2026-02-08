@@ -1,4 +1,6 @@
 # XXX add --max-age argument to UpdateSourceLanguage??
+# XXX add --extras key:value where each MetadataUpdater
+#       has an EXTRAS = {"key": constructor}
 """
 Classes to implement sources-meta-update management tasks
 
@@ -169,8 +171,14 @@ def sources_metadata_update(*,
             except:
                 logger.exception("%s updater exception", updater)
             logger.info("=== end update %s", updater)
-
+
 from elasticsearch_dsl.aggs import A
+
+def es_start():
+    return dt.datetime(2008, 1, 1)
+
+def es_end():
+    dt.datetime.utcnow() + dt.timedelta(days=30)
 
 @updater
 class FindLastStory(MetadataUpdater):
@@ -192,10 +200,11 @@ class FindLastStory(MetadataUpdater):
         OUTER = "outer"
         INNER = "inner"
 
-        # XXX nastiness: direct to elasticsearch_dsl:
+        # XXX nastiness: direct to elasticsearch_dsl using provider method:
         search = p._basic_search(user_query=p.everything_query(),
-                                 start_date=dt.datetime(2008, 1, 1), # XXX
-                                 end_date=yesterday(),
+                                 start_date=es_start(),
+                                 source=False,
+                                 end_date=es_end(), # may be in future!
                                  domains=domains,
                                  url_search_strings=url_search_strings)\
                   .extra(size=0) # just aggs
@@ -232,3 +241,87 @@ class FindLastStory(MetadataUpdater):
                 self.verbose_source(2, "%s: was %s now %s", source, curr, last_date_short)
             else:
                 self.verbose_source(3, "%s: was %s now %s (no update)", source, curr, last_date_short)
+
+import csv                      # TEMP!
+from elasticsearch_dsl import Search
+from elasticsearch_dsl.aggs import Filters
+from elasticsearch_dsl.query import Bool, Exists, Range
+
+@updater
+class FindInvisible(MetadataUpdater):
+    NAME = "invisible"
+    UPDATE_FIELD = "last_story"
+
+    # TEMP: CSV column headers
+    COL_TOTAL = "total"
+    COL_NO_DATE = "no_date"
+    COL_BAD_DATE = "bad_date"
+
+    def run(self):
+        cols = ["id", "name", "url_search_string",
+                self.COL_TOTAL, self.COL_NO_DATE, self.COL_BAD_DATE]
+        self.csv_writer = csv.DictWriter(open("invis.csv", "w"), cols)
+        self.csv_writer.writeheader()
+        # two buckets per domain:
+        self.child_batch_size = self.child_batch_size // 2
+        self.parent_batch_size = self.parent_batch_size // 2
+        super().run()
+
+    def process_sources(self, *,
+                        sources: list[Source],
+                        domains: list[str],
+                        url_search_strings: dict[str,list[str]]) -> None:
+        """
+        called with either a list of domains, and empty url_search strings,
+        or url_search_string with a single dict entry, with value
+        of a list of search strings for a single source.
+        """
+
+        p = self.p              # mc_provider
+
+        # aggregation names:
+        OUTER = "outer"
+        INNER = "inner"
+        NO_DATE = "no_date"
+        BAD_DATE = "bad_date"
+
+        # XXX nastiness: direct to elasticsearch_dsl using provider methods:
+        # even nastier, create search from scratch with no date range,
+        search = Search(using=p._es, index=[p.INDEX_PREFIX + "*"])\
+            .extra(size=0) # just aggs, no hits
+
+        # get DSL for site filtering:
+        t = p._selector_filter_tuple({"domains": domains, "url_search_strings": url_search_strings})
+        search = search.filter(t.query)
+
+        s = len(domains or url_search_strings)
+        search.aggs.bucket(OUTER, A("terms", field="canonical_domain", size=s))\
+                   .bucket(INNER,
+                           Filters(
+                               filters={
+                                   # ES doesn't store fields with null values:
+                                   NO_DATE: Bool(must_not=[
+                                       Exists(field="publication_date")
+                                   ]),
+                                   # includes NO_DATE count:
+                                   BAD_DATE: Bool(must_not=[
+                                       Range(publication_date={'gte': es_start(), "lte": es_end()})
+                                   ])
+                               }
+                           ))
+        res = p._search(search, "invisible")
+        counts_by_domain = {
+            outer["key"]: {
+                self.COL_TOTAL: outer["doc_count"],
+                self.COL_BAD_DATE: outer[INNER]["buckets"][BAD_DATE]["doc_count"],
+                self.COL_NO_DATE: outer[INNER]["buckets"][NO_DATE]["doc_count"]
+            }
+            for outer in res.aggregations[OUTER]["buckets"]
+        }
+
+        for source in sources:
+            counts = counts_by_domain.get(source.name, {"total": 0, BAD_DATE: 0, NO_DATE: 0})
+            counts["id"] = source.id
+            counts["name"] = source.name
+            counts["url_search_string"] = source.url_search_string
+            self.csv_writer.writerow(counts)
