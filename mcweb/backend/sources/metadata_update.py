@@ -258,10 +258,12 @@ class FindInvisible(MetadataUpdater):
     COL_BAD_DATE = "bad_date"
 
     def run(self):
+        # TEMP setup output CSV writer:
         cols = ["id", "name", "url_search_string",
                 self.COL_TOTAL, self.COL_NO_DATE, self.COL_BAD_DATE]
         self.csv_writer = csv.DictWriter(open("invis.csv", "w"), cols)
         self.csv_writer.writeheader()
+
         # two buckets per domain:
         self.child_batch_size = self.child_batch_size // 2
         self.parent_batch_size = self.parent_batch_size // 2
@@ -279,7 +281,7 @@ class FindInvisible(MetadataUpdater):
 
         p = self.p              # mc_provider
 
-        # aggregation names:
+        # aggregation bucket names:
         OUTER = "outer"
         INNER = "inner"
         NO_DATE = "no_date"
@@ -318,9 +320,10 @@ class FindInvisible(MetadataUpdater):
             }
             for outer in res.aggregations[OUTER]["buckets"]
         }
-
         for source in sources:
             counts = counts_by_domain.get(source.name, {"total": 0, BAD_DATE: 0, NO_DATE: 0})
+
+            # TEMP: write to CSV file
             counts["id"] = source.id
             counts["name"] = source.name
             counts["url_search_string"] = source.url_search_string

@@ -86,6 +86,7 @@ class MetadataUpdater:
         self.counters = collections.Counter()
         self.update = options["update"]
         self.process_child_sources = options["process_child_sources"]
+        self.source_ids = [int(x) for x in options["source_id"]]
 
         # not (YET) options(!!):
         # currently limited by number of query_string (OR) clauses
@@ -123,12 +124,18 @@ class MetadataUpdater:
         q = Source.objects.filter(name__isnull=False,
                                   platform=self.platform)\
                           .order_by("id")
-        if self.process_child_sources == ChildSources.NEVER:
+
+        if self.source_ids:     # specific source ids for testing
+            q = q.filter(id__in=self.source_ids)
+        elif self.process_child_sources == ChildSources.NEVER:
             # don't return child sources unless processing them
             q = q.filter(Q(url_search_string__isnull=True) |
                          Q(url_search_string__exact=""))
         elif self.process_child_sources == ChildSources.ONLY:
             q = q.filter(url_search_string__isnull=False)
+        else:
+            assert self.process_child_sources == ChildSources.ALWAYS
+            # no filtering!
         return q
 
     def run(self) -> None:
@@ -296,6 +303,9 @@ class MetadataUpdaterCommand(TaskCommand):
             "--provider-trace", type=int, default=0, help="Provider trace level.")
         parser.add_argument("--rate", type=int, default=100,
                             help="Max ES queries per minute.")
+
+        parser.add_argument("--source-id", action="append", default=[],
+            help="Specific source ids (for testing).")
 
         parser.add_argument("--update", action="store_true",
                             help="Perform database updates (else dry run)")
