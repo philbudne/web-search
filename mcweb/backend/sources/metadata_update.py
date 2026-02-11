@@ -12,8 +12,14 @@ import datetime as dt
 import logging
 
 # PyPI
+import mcmetadata
 from django.db import transaction
 from django.db.models import QuerySet
+from elasticsearch_dsl import Search
+from elasticsearch_dsl.aggs import A, Filters
+from elasticsearch_dsl.query import Bool, Exists, Range
+
+import settings
 
 # mcweb/backend/util/
 from ..util.tasks import TaskLogContext
@@ -27,21 +33,23 @@ logger = logging.getLogger(__name__)
 
 UPDATERS = {}
 
-def updater(cls):
-    """
-    decorator to register an updater class by name
-    """
-    name = getattr(cls, "NAME", None)
-    if not name:
-        name = cls.UPDATE_FIELD
+class UpdateTask(MetadataUpdater):
+    TASK_NAME: str
 
-    UPDATERS[name] = cls
+
+def updater(cls: type[UpdateTask]):
+    """
+    decorator to register an updater class by TASK_NAME
+    for sources-meta-update command "task" argument.
+    """
+    UPDATERS[cls.TASK_NAME] = cls
     return cls
 
 
 @updater
-class UpdateStoriesPerWeek(MetadataUpdater):
-    UPDATE_FIELD = "stories_per_week"
+class UpdateStoriesPerWeek(UpdateTask):
+    TASK_NAME = "stories_per_week"
+    UPDATE_FIELDS = ["stories_per_week"]
 
     def process_sources(self, *,
                         sources: list[Source],
@@ -86,20 +94,20 @@ LANG_COUNT_DAYS = 180  # number of days back to examine
 LANG_COUNT_MIN = 10    # min count for top lang within LANG_COUNT_DAYS
 
 @updater
-class UpdateSourceLanguage(MetadataUpdater):
-    NAME = "language"
-    UPDATE_FIELD = "primary_language" # Source field updated
+class UpdateSourceLanguage(UpdateTask):
+    TASK_NAME = "language"
+    UPDATE_FIELDS = ["primary_language"] # Source fields updated
 
     def sources_query(self) -> QuerySet:
         """
         only process sources without primary language
         """
-        # XXX filter by max age??
+        # XXX filter by created_at (only check new sources)??
         return super().sources_query()\
                       .filter(primary_language__isnull=True)
 
     def run(self) -> None:
-        self.user_object = User.objects.get(username=self.username)
+        self.user_object = User.objects.get(username=self.username) # for ActionHistory
         super().run()
 
     def process_sources(self, *,
@@ -124,7 +132,7 @@ class UpdateSourceLanguage(MetadataUpdater):
 
         # dict indexed by domain name,
         # of ordered dict indexed by language,
-        # of counts
+        # of counts (highest count first)
         domains = agg["buckets"]
         sources_to_update = []
 
@@ -138,16 +146,15 @@ class UpdateSourceLanguage(MetadataUpdater):
                                 self.source_name(source), source.id,
                                 lang, count)
 
-                    # NOTE WELL!!!!  Before you copy this code!!!  This task
-                    # does MANY orders of magnitude less updating than
-                    # stories_per_week or last_story (likely to change live
-                    # sources every week) AND only ever changes a source once,
-                    # so it's reasonable to do updates on a per-source basis,
-                    # since ActionHistory log entries are desired (and probably
-                    # only tenable given the rarity of actions taken), so calling
-                    # Source.save() directly rather than add log_entry creation
-                    # to the batch update process.  Anyone NULLing out the language
-                    # column may get a rude surprise!
+                    # NOTE WELL!!!!  Before you copy this code!!!  This task does MANY
+                    # orders of magnitude less updating than stories_per_week or
+                    # last_story (both of which are likely to change all live sources
+                    # every week) AND only ever changes a source once, so it's reasonable
+                    # to do updates on a per-source basis, since ActionHistory log entries
+                    # are desired (and probably only tenable given the rarity of actions
+                    # taken), so calling Source.save() directly rather than add log_entry
+                    # creation to the batch update process.  Anyone NULLing out the
+                    # language column may get a rude surprise!
                     if self.update:
                         with transaction.atomic():
                             source.primary_language = lang
@@ -172,17 +179,27 @@ def sources_metadata_update(*,
                 logger.exception("%s updater exception", updater)
             logger.info("=== end update %s", updater)
 
-from elasticsearch_dsl.aggs import A
-
 def es_start():
-    return dt.datetime(2008, 1, 1)
+    """
+    earliest searchable date.
+    NOTE!! mc-providers expects both start and end to have
+    same naïveté!!
+    """
+    return dt.datetime.fromisoformat(settings.EARLIEST_AVAILABLE_DATE)
 
-def es_end():
-    dt.datetime.utcnow() + dt.timedelta(days=30)
+def es_end(allow_future: bool = False):
+    """
+    newest possible story pub_date accepted by story-indexer
+    """
+    if allow_future:
+        return dt.datetime.utcnow() + dt.timedelta(days=mcmetadata.MAX_FUTURE_PUB_DATE)
+    else:
+        yesterday()
 
 @updater
-class FindLastStory(MetadataUpdater):
-    UPDATE_FIELD = "last_story"
+class FindLastStory(UpdateTask):
+    TASK_NAME = "last_story"
+    UPDATE_FIELDS = ["last_story"]
 
     def process_sources(self, *,
                         sources: list[Source],
@@ -204,7 +221,7 @@ class FindLastStory(MetadataUpdater):
         search = p._basic_search(user_query=p.everything_query(),
                                  start_date=es_start(),
                                  source=False,
-                                 end_date=es_end(), # may be in future!
+                                 end_date=es_end(),
                                  domains=domains,
                                  url_search_strings=url_search_strings)\
                   .extra(size=0) # just aggs
@@ -213,7 +230,7 @@ class FindLastStory(MetadataUpdater):
         search.aggs.bucket(OUTER, A("terms", field="canonical_domain", size=s))\
                    .bucket(INNER, "max", field="publication_date")
 
-        res = p._search(search, "pub-date-max")
+        res = p._search(search, "pub-date-max") # name for grafana counter
 
         # dict by domain of max pub date
         max_date_by_domain = {
@@ -242,32 +259,30 @@ class FindLastStory(MetadataUpdater):
             else:
                 self.verbose_source(3, "%s: was %s now %s (no update)", source, curr, last_date_short)
 
-import csv                      # TEMP!
-from elasticsearch_dsl import Search
-from elasticsearch_dsl.aggs import Filters
-from elasticsearch_dsl.query import Bool, Exists, Range
+import csv                      # XXX TEMP!!!
 
 @updater
-class FindInvisible(MetadataUpdater):
-    NAME = "invisible"
-    UPDATE_FIELD = "last_story"
+class UpdateInvisible(UpdateTask): # XXX name subject to change!
+    TASK_NAME = "invisible"        # XXX subject to change!
+    UPDATE_FIELDS = ["stories_total", "stories_invisible", "stories_no_date"] # XXX PLACEHOLDERS
 
-    # TEMP: CSV column headers
+    # names in "counts_by_domain", logging, and (TEMP) csv file
     COL_TOTAL = "total"
     COL_NO_DATE = "no_date"
     COL_BAD_DATE = "bad_date"
 
-    def run(self):
+    def __init__(self, *, task_args: dict, options: dict):
+        super().__init__(task_args=task_args, options=options)
+
         # TEMP setup output CSV writer:
         cols = ["id", "name", "url_search_string",
                 self.COL_TOTAL, self.COL_NO_DATE, self.COL_BAD_DATE]
         self.csv_writer = csv.DictWriter(open("invis.csv", "w"), cols)
         self.csv_writer.writeheader()
 
-        # two buckets per domain:
-        self.child_batch_size = self.child_batch_size // 2
-        self.parent_batch_size = self.parent_batch_size // 2
-        super().run()
+        # two count buckets inside each inner bucket??
+        # (in practice, SLIGHTLY larger values worked, but playing it safe):
+        self.child_batch_size = self.parent_batch_size = self.max_clause_count // 3
 
     def process_sources(self, *,
                         sources: list[Source],
@@ -284,8 +299,8 @@ class FindInvisible(MetadataUpdater):
         # aggregation bucket names:
         OUTER = "outer"
         INNER = "inner"
-        NO_DATE = "no_date"
-        BAD_DATE = "bad_date"
+        NO_DATE_BUCKET = "no_date"
+        BAD_DATE_BUCKET = "bad_date"
 
         # XXX nastiness: direct to elasticsearch_dsl using provider methods:
         # even nastier, create search from scratch with no date range,
@@ -302,29 +317,37 @@ class FindInvisible(MetadataUpdater):
                            Filters(
                                filters={
                                    # ES doesn't store fields with null values:
-                                   NO_DATE: Bool(must_not=[
+                                   NO_DATE_BUCKET: Bool(must_not=[
                                        Exists(field="publication_date")
                                    ]),
-                                   # includes NO_DATE count:
-                                   BAD_DATE: Bool(must_not=[
-                                       Range(publication_date={'gte': es_start(), "lte": es_end()})
+                                   # includes NO_DATE_BUCKET count
+                                   # NOTE: allows future dates accepted by mcmetadata
+                                   BAD_DATE_BUCKET: Bool(must_not=[
+                                       Range(publication_date={'gte': es_start(), "lte": es_end(True)})
                                    ])
                                }
                            ))
-        res = p._search(search, "invisible")
+        res = p._search(search, "invisible") # name for grafana counter
         counts_by_domain = {
             outer["key"]: {
                 self.COL_TOTAL: outer["doc_count"],
-                self.COL_BAD_DATE: outer[INNER]["buckets"][BAD_DATE]["doc_count"],
-                self.COL_NO_DATE: outer[INNER]["buckets"][NO_DATE]["doc_count"]
+                self.COL_BAD_DATE: outer[INNER]["buckets"][BAD_DATE_BUCKET]["doc_count"],
+                self.COL_NO_DATE: outer[INNER]["buckets"][NO_DATE_BUCKET]["doc_count"]
             }
             for outer in res.aggregations[OUTER]["buckets"]
         }
         for source in sources:
-            counts = counts_by_domain.get(source.name, {"total": 0, BAD_DATE: 0, NO_DATE: 0})
+            counts = counts_by_domain.get(source.name, {"total": 0, BAD_DATE_BUCKET: 0, NO_DATE_BUCKET: 0})
+
+            self.verbose_source(3, "%s: %s %d, %s %d, %s %d", source,
+                                self.COL_TOTAL, counts[self.COL_TOTAL],
+                                self.COL_BAD_DATE, counts[self.COL_BAD_DATE],
+                                self.COL_NO_DATE, counts[self.COL_NO_DATE])
 
             # TEMP: write to CSV file
             counts["id"] = source.id
             counts["name"] = source.name
             counts["url_search_string"] = source.url_search_string
             self.csv_writer.writerow(counts)
+
+            # check if changed before calling needs_update?!!!
