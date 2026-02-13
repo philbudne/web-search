@@ -157,6 +157,30 @@ export default function SourceShow() {
             ? source.last_rescraped_msg
             : 'Source has not been rescraped recently' }
         </p>
+        <p>
+          {/* eslint-disable-next-line react/jsx-one-expression-per-line */}
+          <b>Total stories indexed (at start of this month):</b> {source.stories_total !== null
+            ? source.stories_total
+            : 'Unknown' }
+        </p>
+        <p>
+          {/* eslint-disable-next-line react/jsx-one-expression-per-line */}
+          <b>Stories from too far in past:</b> {source.stories_date_past !== null
+            ? source.stories_date_past
+            : 'Unknown' }
+        </p>
+        <p>
+          {/* eslint-disable-next-line react/jsx-one-expression-per-line */}
+          <b>Stories from too far in future:</b> {source.stories_date_future !== null
+            ? source.stories_date_future
+            : 'Unknown' }
+        </p>
+        <p>
+          {/* eslint-disable-next-line react/jsx-one-expression-per-line */}
+          <b>Stories without a date:</b> {source.stories_date_empty !== null
+            ? source.stories_date_empty
+            : 'Unknown' }
+        </p>
 
       </div>
 
