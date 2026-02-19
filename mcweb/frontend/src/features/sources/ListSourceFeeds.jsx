@@ -50,6 +50,9 @@ function ListSourceFeeds() {
       ...f,
       details: feedDetails.feeds.find((fd) => fd.id === f.id),
     }));
+    // PLB: assumes ISO date format, handle null values
+    mergedFeeds.sort((a, b) => (a.last_new_stories < b.last_new_stories ? -1 :
+				(a.last_new_stories == b.last_new_stories ? 0 : 1)));
   }
 
   // const clickEvent = (e) => {
@@ -82,8 +85,8 @@ function ListSourceFeeds() {
             <th>Admin enabled?</th>
             <th>System enabled?</th>
             <th>System status</th>
-            <th>Last Attempt</th>
             <th>Last Success</th>
+            <th>Last Stories</th>
             <PermissionedContributor>
               <th>Admin</th>
             </PermissionedContributor>
@@ -103,13 +106,13 @@ function ListSourceFeeds() {
               <td>{(feed.details && feed.details.system_enabled) ? '✅' : '❌'}</td>
               <td>{(feed.details && feed.details.system_status) ? feed.details.system_status : '?'}</td>
               <td>
-                {(feed.details && feed.details.last_fetch_attempt)
-                  ? dayjs.utc(feed.details.last_fetch_attempt).local().format('MM/DD/YYYY HH:mm:ss') : '?'}
+                {(feed.details && feed.details.last_fetch_success)
+                  ? dayjs.utc(feed.details.last_fetch_success).local().format('MM/DD/YYYY HH:mm:ss') : '?'}
 
               </td>
               <td>
-                {(feed.details && feed.details.last_fetch_success)
-                  ? dayjs.utc(feed.details.last_fetch_success).local().format('MM/DD/YYYY HH:mm:ss') : '?'}
+                {(feed.details && feed.details.last_new_stories)
+                  ? dayjs.utc(feed.details.last_new_stories).local().format('MM/DD/YYYY HH:mm:ss') : '?'}
 
               </td>
               <td>
