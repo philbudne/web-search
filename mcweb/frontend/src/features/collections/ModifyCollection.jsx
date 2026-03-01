@@ -36,7 +36,7 @@ export default function ModifyCollection() {
 
   // form state for text fields
   const [formState, setFormState] = useState({
-    id: 0, name: '', notes: '', platform: 'online_news', public: true, featured: false, rescrape: true, managed: false,
+    id: 0, name: '', notes: '', platform: 'online_news', public: true, featured_rank: null, rescrape: true, managed: false,
   });
 
   const [open, setOpen] = useState(false);
@@ -81,7 +81,7 @@ export default function ModifyCollection() {
         notes: data.notes ? data.notes : '',
         platform: data.platform,
         public: data.public,
-        featured: data.featured,
+        featured_rank: data.featured_rank,
         rescrape: data.platform === 'online_news',
         managed: data.managed,
       };
@@ -203,8 +203,8 @@ export default function ModifyCollection() {
             <FormControlLabel
               control={(
                 <Checkbox
-                  name="featured"
-                  checked={formState.featured}
+                  name="featured_rank"
+                  checked={formState.featured_rank}
                   onChange={handleChange}
                   disabled={disabled}
                 />
@@ -225,7 +225,7 @@ export default function ModifyCollection() {
                   notes: formState.notes.trim(),
                   platform: 'online_news',
                   public: formState.public,
-                  featured: formState.featured,
+                  featured_rank: formState.featured_rank,
                   managed: formState.managed,
                 }).unwrap();
                 enqueueSnackbar('Saved changes', { variant: 'success' });

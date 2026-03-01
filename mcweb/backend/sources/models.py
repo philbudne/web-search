@@ -25,10 +25,11 @@ class Collection(models.Model):
     platform = models.CharField(max_length=100, choices=CollectionPlatforms.choices, null=True,
                                 default=CollectionPlatforms.ONLINE_NEWS)
     public = models.BooleanField(default=True, null=False, blank=False)  
-    featured = models.BooleanField(default=False, null=False, blank=False)
     managed = models.BooleanField(default=False, null=False, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     modified_at = models.DateTimeField(auto_now=True, null=True)
+    # non-zero if featured: larger number means show sooner:
+    featured_rank = models.IntegerField(default=None, null=True)
 
     class Meta:
         permissions = (('edit_collection', 'Edit collection')),

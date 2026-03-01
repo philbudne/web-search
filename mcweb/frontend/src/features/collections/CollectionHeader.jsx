@@ -73,7 +73,7 @@ export default function CollectionHeader() {
           </Link>
         </h1>
 
-        {collection.featured && (
+        {collection.featured_rank !== null && (
           <Chip label="Featured Collection" color="success" />
         )}
         {collection.managed && (
