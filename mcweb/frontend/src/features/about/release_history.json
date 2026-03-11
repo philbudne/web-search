@@ -1,7 +1,10 @@
-[{"version": "v2.5.1",
-"date": "2026-03-06",
-"notes": ["made monitored and featured collections visible",
-"made monitored and featured collections easier to manage"
+[{"version": "v2.5.3",
+"date": "2026-03-14",
+"notes": ["show update date in source column tooltips",
+"give error if search selections don't find sources"
+]},{"version": "v2.5.2",
+"date": "2026-03-07",
+"notes": ["quick fix for source creation"
 ]},{"version": "v2.5.0",
 "date": "2026-02-27",
 "notes": ["sort sources by stories per week",
