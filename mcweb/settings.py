@@ -49,7 +49,7 @@ class Groups:
     
     # Default user assignments for groups
     DEFAULT_USERS = {
-        CONTRIBUTOR : ["e.leon@northeastern.edu"],
+        CONTRIBUTOR : ["r.bhargava@northeastern.edu"],
         API_ACCESS : ["all"],
         HIGH_RATE_LIMIT: []
     }
