@@ -156,21 +156,14 @@ class CollectionViewSet(ActionHistoryViewSetMixin, viewsets.ModelViewSet):
         queryset = queryset.filter(platform=Source.SourcePlatforms.ONLINE_NEWS)
         name = self.request.query_params.get("name")
         if name is not None:
-            if constance.config.SRCS_KW_NEWEST_SEARCH:
-                # NEW EXPERIMENTAL PG specific keyword search:
-                # Generates name ILIKE '%word1%' ...
-                # The collections table is small enough so that it has not (yet)
-                # been indexed to accelerate searches (see the SourcesViewSet below).
-                # ("manage.py search times york new" runs in 0.1 sec)
-                name_query = None
-                for word in name.split():
-                    name_query = _add_search_term(name_query, Q(name__iicontains=word))
-                queryset = queryset.filter(name_query)
-            else:
-                v = SearchVector("name")
-                q = SearchQuery(name, search_type="websearch")
-                queryset = queryset.annotate(rank=SearchRank(v, q))\
-                                   .filter(rank__gte=0.01)
+            # Generates name ILIKE '%word1%' ...
+            # The collections table is small enough so that it has not (yet)
+            # been indexed to accelerate searches (see the SourcesViewSet below).
+            # ("manage.py search times york new" runs in 0.1 sec)
+            name_query = None
+            for word in name.split():
+                name_query = _add_search_term(name_query, Q(name__iicontains=word))
+            queryset = queryset.filter(name_query)
         return queryset
 
     def get_serializer_class(self):
@@ -414,50 +407,34 @@ class SourcesViewSet(ActionHistoryViewSetMixin, viewsets.ModelViewSet):
         queryset = queryset.filter(platform=Source.SourcePlatforms.ONLINE_NEWS)
         name = self.request.query_params.get("name")
         if name is not None:
-            if constance.config.SRCS_KW_NEWEST_SEARCH:
-                # NEW EXPERIMENTAL PG specific keyword search:
+            # The strategy is to generate:
+            # ((name ILIKE '%word1%' AND name ILIKE '%word2' ....) OR
+            #  (label ILIKE '%word1%' AND label ILIKE '%word2' ....))
+            # which uses a trigram-based index to accelerate the search.  See
+            # migrations/0038_... for EXCRUCIATING detail/docs on the choice of the
+            # index.
 
-                # The strategy is to generate:
-                # ((name ILIKE '%word1%' AND name ILIKE '%word2' ....) OR
-                #  (label ILIKE '%word1%' AND label ILIKE '%word2' ....))
-                # which uses a trigram-based index to accelerate the search.  See
-                # migrations/0038_... for EXCRUCIATING detail/docs on the choice of the
-                # index.
+            # NOTA MOLTO MOLTO BENE!  The current formulation was developed
+            # PAINSTAKINGLY!  PLEASE test any changes here with the manage.py search
+            # command (which uses this code) and make sure it hasn't slowed down the
+            # search (ie; PG has stopped using the index).  Queries using the index
+            # can run in under 50 millseconds, while queries NOT using the index can
+            # take over 2.5 seconds (ie; one and a half orders of magnitude), and
+            # might support a find-as-you-type (live/incremental) search if the index
+            # is in use, while 2+ seconds is user-frustrating if not.
+            base_queryset = queryset # for union query
+            name_query = label_query = alt_query = None
 
-                # NOTA MOLTO MOLTO BENE!  The current formulation was developed
-                # PAINSTAKINGLY!  PLEASE test any changes here with the manage.py search
-                # command (which uses this code) and make sure it hasn't slowed down the
-                # search (ie; PG has stopped using the index).  Queries using the index
-                # can run in under 50 millseconds, while queries NOT using the index can
-                # take over 2.5 seconds (ie; one and a half orders of magnitude), and
-                # might support a find-as-you-type (live/incremental) search if the index
-                # is in use, while 2+ seconds is user-frustrating if not.
-                base_queryset = queryset # for union query
-                name_query = label_query = alt_query = None
+            for word in name.split():
+                name_query = _add_search_term(name_query, Q(name__iicontains=word))
+                label_query = _add_search_term(label_query, Q(label__iicontains=word))
+                alt_query = _add_search_term(alt_query, Q(alternativedomain__domain__iicontains=word))
 
-                for word in name.split():
-                    name_query = _add_search_term(name_query, Q(name__iicontains=word))
-                    label_query = _add_search_term(label_query, Q(label__iicontains=word))
-                    alt_query = _add_search_term(alt_query, Q(alternativedomain__domain__iicontains=word))
-
-                # When attempting to OR in alt_query along with name_ and label_query PG
-                # won't use the index, but will when the alt_query is unionized in.
-                queryset = queryset.filter(name_query | label_query)\
-                                   .union(base_queryset.filter(alt_query))\
-                                   .order_by(self._ordering)
-            else:
-                v = SearchVector("name", "label") # equal weight
-                q = SearchQuery(name, search_type="websearch")
-                # NOTE! uses precomputed search_vector column!!
-                queryset = queryset.filter(search_vector=q)\
-                                   .annotate(rank=SearchRank(v, q))\
-                                   .filter(rank__gte=0.01)
-                # This slows query down from 0.09 sec to over 5 seconds, (but is still
-                # using index!).  Leaving as is, to allow reverting to EXACT previous
-                # behavior!
-                alternative_domains = AlternativeDomain.objects.filter(domain__icontains=name)
-                alternative_sources = Source.objects.filter(id__in=alternative_domains.values_list('source_id', flat=True))
-                queryset = queryset | alternative_sources
+            # When attempting to OR in alt_query along with name_ and label_query PG
+            # won't use the index, but will when the alt_query is unionized in.
+            queryset = queryset.filter(name_query | label_query)\
+                               .union(base_queryset.filter(alt_query))\
+                               .order_by(self._ordering)
 
         # uncomment to see the generated query and/or PG's query plan:
         # (you want to see "source_name_label_gin_index", or whatever
