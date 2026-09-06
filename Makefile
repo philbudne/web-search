@@ -3,6 +3,7 @@ PYTHON=python3
 
 help:
 	@echo "Housekeeping tasks for development:"
+	@echo "make build-frontend -- build frontend files"
 	@echo "make clean-all -- cleanup all development environments"
 	@echo "make clean-backend -- cleanup after install-backend"
 	@echo "make clean-deploy -- cleanup after install-deploy"
@@ -15,7 +16,7 @@ help:
 # note: .PHONY may be needed if files that look like the above are
 # targets (or files with known extensions that could be MADE INTO them!)
 
-################ deploy-related
+################ Dokku deploy-related
 
 DEPLOY_REQ=req-deploy.txt
 DEPLOY_VENV=deploy-venv
@@ -64,6 +65,9 @@ FRONTEND_REQ=package.json
 # directory for _DONE, where at least SOME files as installed:
 FRONTEND_DIR=node_modules
 FRONTEND_DONE: $(FRONTEND_DIR)/.done
+
+build-frontend:
+	npm run build
 
 install-frontend: $(FRONTEND_DONE)
 
