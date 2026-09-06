@@ -1,3 +1,4 @@
+// here from emailed ".../reset-password/confirmed?token=...." link
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Avatar from '@mui/material/Avatar';
@@ -11,6 +12,7 @@ import { useSnackbar } from 'notistack';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import Typography from '@mui/material/Typography';
 
+import MatchingPasswords from './MatchingPasswords';
 import { useResetPasswordMutation } from '../../app/services/authApi';
 
 export default function ConfirmedPassword() {
@@ -25,6 +27,14 @@ export default function ConfirmedPassword() {
   const handleChange = ({ target: { name, value } }) => (
     setFormState((prev) => ({ ...prev, [name]: value }))
   );
+
+  // MatchingPasswords element
+  const [passwordData, setPasswordData] = useState({ password: '', isValid: false });
+  const handlePasswordChange = (data) => {
+    setPasswordData(data);
+    const pw = data.password.trim();
+    setFormState((prev) => ({ ...prev, new_password: pw, confirm_password: pw }));
+  };
 
   const [reset, {
     isLoading, isError, error, isSuccess,
@@ -77,28 +87,9 @@ export default function ConfirmedPassword() {
           sx={{ mt: 1 }}
         >
 
-          {/* Password */}
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            name="new_password"
-            label="Password"
-            type="password"
-            autoComplete="new-password"
-            onChange={handleChange}
-          />
-
-          {/* Confirm Password */}
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            name="confirm_password"
-            label="Confirm Password"
-            type="password"
-            autoComplete="new-password"
-            onChange={handleChange}
+          {/* Passwords & complaints */}
+          <MatchingPasswords
+           onChange={handlePasswordChange}
           />
 
           <Button
@@ -108,6 +99,7 @@ export default function ConfirmedPassword() {
             onClick={async () => {
               await reset(formState);
             }}
+            disabled={!passwordData.isValid}
           >
             Reset Password
           </Button>

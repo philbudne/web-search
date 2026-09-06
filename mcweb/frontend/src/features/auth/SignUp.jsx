@@ -14,8 +14,10 @@ import { FormControlLabel, Checkbox } from '@mui/material';
 import { Link as MuiLink } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useNavigate, Link } from 'react-router-dom';
+
+import MatchingPasswords from './MatchingPasswords';
 import { CsrfToken } from '../../services/csrfToken';
-import { useRegisterMutation, usePasswordStrengthMutation, useRequestResetCodeEmailMutation } from '../../app/services/authApi';
+import { useRegisterMutation, useRequestResetCodeEmailMutation } from '../../app/services/authApi';
 
 export default function SignUp() {
   const navigate = useNavigate();
@@ -26,14 +28,8 @@ export default function SignUp() {
 
   const [requestResetEmail, { isLoading: isLoadingEmail, isError }] = useRequestResetCodeEmailMutation();
 
-  // a list of the errors
-  const [listOfErrors, setListOfErrors] = useState([]);
-
-  // disable button if password isn't validated
-  const [show, setShow] = useState(true);
-
   // credentials
-  const [formState, setFormState] = React.useState({
+  const [formState, setFormState] = useState({
     first_name: '',
     last_name: '',
     email: '',
@@ -42,48 +38,26 @@ export default function SignUp() {
     notes: '',
   });
 
-  // initialize accepted checkbox state as false
-  const [accepted, setAccepted] = useState(false);
-
   const handleChange = ({ target: { name, value } }) => (
     setFormState((prev) => ({ ...prev, [name]: value.trim() }))
   );
+
+  // MatchingPasswords element
+  const [passwordData, setPasswordData] = useState({ password: '', isValid: false });
+  const handlePasswordChange = (data) => {
+    setPasswordData(data);
+    const pw = data.password.trim();
+    setFormState((prev) => ({ ...prev, password1: pw, password2: pw }));
+  };
+
+  // for terms of use checkbox
+  // initialize accepted checkbox state as false
+  const [accepted, setAccepted] = useState(false);
 
   const handleAcceptedChange = (e) => (
     setAccepted(e.target.checked)
   );
 
-  // list of password validators (ex: password is too short, no numbers, no special characters ...)
-  const [passwordStrength] = usePasswordStrengthMutation();
-
-  useEffect(() => {
-    async function fetchData() {
-      const data = await passwordStrength({
-        password1: formState.password1,
-        password2: formState.password2,
-      }).unwrap();
-      return data;
-    }
-
-    const fetchDataAndProcess = async () => {
-      const data = await fetchData();
-
-      if (data && data.length !== 0) {
-        const newListOfErrors = data.map((error) => (
-          <ul key={error} className="passwordStrength">
-            <li key={error}>{error}</li>
-          </ul>
-        ));
-        setListOfErrors(newListOfErrors);
-        setShow(true);
-      } else {
-        setListOfErrors([]);
-        setShow(false);
-      }
-    };
-    fetchDataAndProcess();
-  }, [formState.password1, formState.password2]);
-  
   return (
     <div>
       <Container maxWidth="md">
@@ -98,7 +72,6 @@ export default function SignUp() {
         >
           <Avatar sx={{ m: 1, bgcolor: 'secondary.main' }}>
             <LockOutlinedIcon titleAccess="admin only" />
-
           </Avatar>
 
           {isError && (
@@ -168,34 +141,12 @@ export default function SignUp() {
                 />
               </Grid>
 
-              {/* Password */}
+              {/* Passwords & complaints */}
               <Grid item xs={12}>
-                <TextField
-                  required
-                  fullWidth
-                  name="password1"
-                  label="Password"
-                  type="password"
-                  autoComplete="new-password"
-                  onChange={handleChange}
+                <MatchingPasswords
+                 onChange={handlePasswordChange}
                 />
               </Grid>
-
-              {/* Confirm Password */}
-              <Grid item xs={12}>
-                <TextField
-                  required
-                  fullWidth
-                  name="password2"
-                  label="Confirm Password"
-                  type="password"
-                  autoComplete="new-password"
-                  onChange={handleChange}
-                />
-              </Grid>
-
-              {/* list the errors */}
-              {listOfErrors}
 
               {/* Notes */}
               <Grid item xs={12}>
@@ -250,7 +201,7 @@ export default function SignUp() {
               fullWidth
               variant="contained"
               sx={{ mt: 3, mb: 2 }}
-              disabled={isLoading || show || !accepted}
+              disabled={isLoading || !accepted || !passwordData.isValid}
               onClick={async () => {
                 try {
                   // creating user
