@@ -6,21 +6,21 @@
 /* NOT as flexible as Django https://docs.djangoproject.com/en/dev/ref/settings/#auth-password-validators */
 
 import React, { useState, useEffect } from 'react';
-import { 
-  TextField, 
-  IconButton, 
-  InputAdornment, 
-  Box, 
-  Typography, 
-  List, 
-  ListItem, 
-  ListItemIcon 
+import {
+  TextField,
+  IconButton,
+  InputAdornment,
+  Box,
+  Typography,
+  List,
+  ListItem,
+  ListItemIcon
 } from '@mui/material';
-import { 
-  Visibility, 
-  VisibilityOff, 
-  CheckCircle, 
-  Cancel 
+import {
+  Visibility,
+  VisibilityOff,
+  CheckCircle,
+  Cancel
 } from '@mui/icons-material';
 
 export default function MatchingPasswords({
