@@ -3,7 +3,6 @@ import logging
 from django.http import HttpResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.models import auth, User
-from django.contrib.auth.password_validation import validate_password
 from rest_framework.response import Response
 from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -17,30 +16,32 @@ from util.stats import api_stats
 import backend.users.legacy as legacy
 from django.core import serializers
 from guardian.shortcuts import get_objects_for_user
-from .models import Profile, QuotaHistory
+from .models import Profile, QuotaHistory, ResetCodes
 from ..sources.models import Collection
 from ..sources.permissions import get_groups
 
+# sanity check: full validation done in frontend
+MIN_PASSWORD = 8
 
 logger = logging.getLogger(__name__)
 
-def _auth_err_message(message: str) -> HttpResponse:
+def _auth_err_message(message: str, *, status: int = 403) -> HttpResponse:
     """
-    shorthand to return HTTP 403 (Forbidden)
+    shorthand to return HTTP error (default 403 Forbidden)
     with explanation in JSON "message" field
     """
-    logger.debug("_auth_err_message %s", message)
+    logger.debug("_auth_err_message (%d) %s", status, message)
     data = json.dumps({'message': message})
-    return HttpResponse(data, content_type='application/json', status=403)
+    return HttpResponse(data, content_type='application/json', status=status)
 
-def _auth_err_error(error: str) -> HttpResponse:
+def _auth_err_error(error: str, *, status: int = 403) -> HttpResponse:
     """
-    shorthand to return HTTP 403 (Forbidden)
+    shorthand to return HTTP error (default 403 Forbidden)
     with explanation in JSON "error" field
     """
-    logger.debug("_auth_err_error %s", error)
+    logger.debug("_auth_err_error (%d) %s", status, error)
     data = json.dumps({'error': error})
-    return HttpResponse(data, content_type='application/json', status=403)
+    return HttpResponse(data, content_type='application/json', status=status)
 
 @api_stats  # PLEASE KEEP FIRST!
 @authentication_classes([TokenAuthentication, SessionAuthentication])
@@ -60,44 +61,6 @@ def profile(request):
     else:
         return _auth_err_message("User Not Found")
     return HttpResponse(data, content_type='application/json')
-
-@api_stats  # PLEASE KEEP FIRST!
-@require_http_methods(["POST"])
-def password_strength(request):
-    # get the passwords from SignUp.jsx formState
-
-    payload = json.loads(request.body)
-
-    password1 = payload.get('password1', None)
-    password2 = payload.get('password2', None)
-
-    # a list for the error messages
-    error_messages = []
-    # check if the passwords are the same
-    if password1 != password2:
-        error_messages.append("Your passwords do not match.")
-        data = json.dumps(error_messages)
-        return HttpResponse(data, content_type='application/json')
-
-    # validate the password, if there are no errors, the password is matching and strong!
-    try:
-        validate_password(password1)
-    # Password is invalid, handle the error gracefully
-    except ValidationError as e:
-        error_messages.extend(list(e.messages))
-
-    # instead of rewriting the django built in validation errors, I'm going to replace them manually
-    for i in range(len(error_messages)):
-        if error_messages[i] == "This password is too short. It must contain at least 10 characters.":
-            error_messages[i] = "Your password must contain at least 10 characters."
-        if error_messages[i] == "This passwords is too common.":
-            error_messages[i] = "Your password is too common."
-
-    data = json.dumps(error_messages)
-
-    # return the error messages
-    return HttpResponse(data, content_type='application/json')
-
 
 @api_stats  # PLEASE KEEP FIRST!
 @require_http_methods(["POST"])
@@ -168,31 +131,30 @@ def register(request):
         email = payload.get('email', None)
         email = email.strip() if email else None
         password1 = payload.get('password1', None)
-        password1 = password1.strip() if password1 else None
         password2 = payload.get('password2', None)
-        password2 = password2.strip() if password2 else None
         notes = payload.get('notes', None)
         notes = notes.strip() if notes else None
 
+        if password1 is None or password2 is None:
+            return _auth_err_message("Passwords missing")
+
+        password1 = password1.strip()
+        password2 = password2.strip()
+
         # first verify passwords match
+        # already tested by MatchingPasswords!
+        # (could get by with a single password datum)
         if password1 != password2:
-            logging.debug('password not matching')
             return _auth_err_message("Passwords don't match")
+
+        # strength already tested by MatchingPasswords!
+        if len(password1) < MIN_PASSWORD: # sanity check!
+            return _auth_err_message("Password too short")
 
         # verify if the email is left empty
         if email == "" or '@' not in email:
             logging.debug("Email is either empty or doesn't contain an @")
             return _auth_err_message("Invalid email")
-
-        """"
-        verifies is password passes:
-         -  minimum length of the password is 10 characters
-         -  password doesn't occurs in a list of 20,000 common passwords
-         -  the password isn't entirely numeric
-         -  at least 3 numbers
-         -  at least 1 special character (['!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '~', '/', ':', ';'])
-        """
-        validate_password(password1)
 
         # next verify email is new
         try:
@@ -226,9 +188,8 @@ def register(request):
         data = json.dumps({'message': "new user created", "email": created_user.email})
         return HttpResponse(data, content_type='application/json', status=200)
     except Exception as e:
-        logger.exception(e)
-        data = json.dumps({'message': str(e)})
-        return HttpResponse(data, content_type='application/json', status=400)
+        logger.exception("register")
+        return _auth_error_message(str(e), 400)
 
 
 @api_stats  # PLEASE KEEP FIRST!
@@ -272,8 +233,7 @@ def reset_token(request):
         data = json.dumps({'message': "New token created!"})
         return HttpResponse(data, content_type='application/json', status=200)
     except Exception as e:
-        data = json.dumps({'error': e})
-        return HttpResponse(data, content_type='application/json', status=400)
+        return _auth_err_error(str(e), status=400)
     
 @api_stats  # PLEASE KEEP FIRST!
 @authentication_classes([TokenAuthentication])
@@ -323,6 +283,49 @@ def users_quotas(request):
             'week': quota.week.strftime('%Y-%m-%d'),
         } for quota in quotas])
     return HttpResponse(data, content_type='application/json')
+
+@api_stats  # PLEASE KEEP FIRST!
+@require_http_methods(["POST"])
+@permission_classes([AllowAny])
+def reset_password(request):
+    """
+    was api.ResetPassword class (a view)
+    """
+
+    try:
+        data = json.loads(request.body)
+        token = data.get('token')
+        logging.debug("reset_password: token %s", token)
+        reset_obj = ResetCodes.objects.filter(token=token).first()
+    except:
+        logger.exception("reset_password")
+        return _auth_err_error('Invalid request', status=400)
+
+    if not reset_obj:
+        return _auth_err_error('Invalid token', status=400)
+
+    new_password = data.get('new_password', '').strip()
+    confirm_password = data.get('confirm_password', '').strip()
+
+    # already tested by MatchingPasswords
+    # (could get by with just new_password)!
+    if new_password != confirm_password:
+        return _auth_err_error("Passwords don't match", status=400)
+
+    # strength already tested by MatchingPasswords!
+    if len(new_password) < MIN_PASSWORD:  # sanity check!!
+        return _auth_err_error('Password too short', status=400)
+
+    # was email=reset_obj.email (case sensitive)
+    user = User.objects.filter(email__iexact=reset_obj.email).first()
+    if user:
+        user.set_password(new_password)
+        user.save()
+        reset_obj.delete()
+        return HttpResponse(json.dumps({'success':'Password updated'}), content_type='application/json')
+    else:
+        return _auth_err_error('No user found', status=404)
+
 
 def get_collections_permissions(user):
     collection_perms = get_objects_for_user(user, 'edit_collection', Collection)

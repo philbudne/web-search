@@ -57,13 +57,6 @@ export const api = createApi({
         method: 'DELETE',
       }),
     }),
-    passwordStrength: builder.mutation({
-      query: (credentials) => ({
-        url: 'password-strength',
-        method: 'POST',
-        body: { ...credentials },
-      }),
-    }),
     resetToken: builder.mutation({
       query: () => ({
         url: 'reset-token',
@@ -99,7 +92,6 @@ export const {
   useEmailExistsQuery,
   useResetPasswordMutation,
   useDeleteUserMutation,
-  usePasswordStrengthMutation,
   useResetTokenMutation,
   useGetUserQuotasQuery,
   useRequestResetCodeEmailMutation,
