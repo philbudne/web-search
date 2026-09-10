@@ -39,17 +39,54 @@ class SourceSerializerTest(APITestCase):
         self.assertTrue(serializer.is_valid())
         source = serializer.save()
         self.assertEqual(source.name, self.valid_data['name'])
-        self.assertEqual(source.url_search_string, self.valid_data['url_search_string'])
+        # valid_data never sets url_search_string, so it should be unset on the new Source
+        self.assertIsNone(source.url_search_string)
 
     def test_create_source_with_existing_name(self):
+        # valid_data has no url_search_string, so a second Source with the same
+        # name (and no url_search_string) is a plain duplicate.
         Source.objects.create(**self.valid_data)
         serializer = SourceSerializer(data=self.valid_data)
         self.assertFalse(serializer.is_valid())
         self.assertIn('name', serializer.errors)
 
     def test_create_source_with_existing_url_search_string(self):
-        Source.objects.create(**self.valid_data)
-        self.valid_data['name'] = 'newname.com'
-        serializer = SourceSerializer(data=self.valid_data)
+        # Sources scoped to a url_search_string may share a name/homepage with
+        # other Sources (e.g. different sections of the same site), so this
+        # must reuse the same url_search_string to be a genuine duplicate --
+        # changing only the name (as this test previously did) doesn't
+        # exercise url_search_string uniqueness at all.
+        data_with_uss = {**self.valid_data, 'url_search_string': 'testhomepage.com/*'}
+        Source.objects.create(**data_with_uss)
+        serializer = SourceSerializer(data=data_with_uss)
         self.assertFalse(serializer.is_valid())
         self.assertIn('url_search_string', serializer.errors)
+
+    def test_different_url_search_string_same_name_is_not_a_duplicate(self):
+        # Two Sources may share a name/homepage as long as their
+        # url_search_string differs (e.g. different sections of the same
+        # site) -- validate_name must only enforce name-uniqueness when no
+        # url_search_string is given.
+        Source.objects.create(**self.valid_data, url_search_string='testhomepage.com/section-a/*')
+        serializer = SourceSerializer(data={
+            **self.valid_data,
+            'url_search_string': 'testhomepage.com/section-b/*',
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_update_existing_source_without_changing_name_is_valid(self):
+        # validate_name's duplicate check must exclude the instance being
+        # updated, otherwise every update of a Source (without changing its
+        # name) would incorrectly flag itself as a duplicate of itself.
+        source = Source.objects.create(**self.valid_data)
+        updated_data = {**self.valid_data, 'notes': 'updated notes'}
+        serializer = SourceSerializer(source, data=updated_data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_update_existing_source_without_changing_url_search_string_is_valid(self):
+        # Same as above, but for validate_url_search_string's duplicate check.
+        data_with_uss = {**self.valid_data, 'url_search_string': 'testhomepage.com/*'}
+        source = Source.objects.create(**data_with_uss)
+        updated_data = {**data_with_uss, 'notes': 'updated notes'}
+        serializer = SourceSerializer(source, data=updated_data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
