@@ -377,6 +377,7 @@ def sources(request):
     QuotaHistory.increment(request.user.id, request.user.is_staff, pq.provider_name, 4)
     return json_response({"sources": response})
 
+@login_required(redirect_field_name='/auth/login')
 @require_http_methods(["GET"])
 @action(detail=False)
 def download_sources_csv(request):
@@ -419,6 +420,7 @@ def languages(request):
     return json_response({"languages": response})
 
 
+@login_required(redirect_field_name='/auth/login')
 @require_http_methods(["GET"])
 @action(detail=False)
 def download_languages_csv(request):
@@ -491,6 +493,7 @@ def words(request):
                         
 
 
+@login_required(redirect_field_name='/auth/login')
 @require_http_methods(["GET"])
 @action(detail=False)
 def download_words_csv(request):
@@ -511,6 +514,7 @@ def download_words_csv(request):
     CSVWriterHelper.write_top_words(writer, words, cols)
     return response
 
+@login_required(redirect_field_name='/auth/login')
 @require_http_methods(["GET"])
 @action(detail=False)
 def download_counts_over_time_csv(request):
