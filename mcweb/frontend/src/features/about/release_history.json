@@ -1,4 +1,10 @@
 [
+{"version":"v3.1.12",
+ "date":"2026-09-11",
+ "notes":[
+   "improve sign-up and password change UIs"
+ ]
+},
 {"version":"v3.1.11",
  "date":"2026-09-05",
  "notes":[
