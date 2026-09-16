@@ -6,7 +6,7 @@ djangorestframework-simplejwt[crypto]==5.2.*
 pyhumps==3.8.*
 django-environ==0.9.*
 django-constance[redis]==4.1.*
-django-ratelimit==4.1.*
+django-smart-ratelimit[redis]==4.12.*
 dj-database-url==1.0.*
 mediacloud-metadata==1.4.*
 python-dateutil==2.8.*

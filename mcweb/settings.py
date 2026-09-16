@@ -118,9 +118,11 @@ env = environ.Env(      # @@CONFIGURATION@@ definitions (datatype, default value
     EMAIL_ORGANIZATION=(str, "Media Cloud Development"),
     GIT_REV=(str, ""),
     LOG_LEVEL=(str, "DEBUG"),
+    MCI_API_LIBRARY_VERSION=(str, "5.1.0"), # latest client
     MONITOR_API_URL=(str, ""), # manage.py monitor-api command
     MONITOR_API_USER=(str, "monitor-api@mediacloud.org"), # manage.py monitor-api command
     PROVIDERS_TIMEOUT=(int, 60*10),
+    REDIS_URL=(str, ""),
     SCRAPE_ERROR_RECIPIENTS=(list, []),
     SCRAPE_TIMEOUT_SECONDS=(float, 10.0), # http connect/read
     SENTRY_DSN=(str, ""),
@@ -152,7 +154,8 @@ ALLOWED_HOSTS = env("ALLOWED_HOSTS") # list
 ANALYTICS_MATOMO_DOMAIN = env('ANALYTICS_MATOMO_DOMAIN')
 ANALYTICS_MATOMO_SITE_ID = env('ANALYTICS_MATOMO_SITE_ID')
 
-AVAILABLE_PROVIDERS = ["onlinenews-mediacloud", "onlinenews-waybackmachine"]
+# used in frontend.views.index and backend.search.views.providers
+AVAILABLE_PROVIDERS = ["onlinenews-mediacloud"]
 CACHE_SECONDS = env("CACHE_SECONDS")
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS") # defined as list
 
@@ -174,9 +177,16 @@ EMAIL_ORGANIZATION = env('EMAIL_ORGANIZATION') # used in subject line
 
 GIT_REV = env("GIT_REV")      # supplied by Dokku, returned by /api/version
 LOG_LEVEL = env('LOG_LEVEL').upper()
+MC_API_LIBRARY_VERSION = env('MC_API_LIBRARY_VERSION')
 MONITOR_API_URL = env('MONITOR_API_URL')
 MONITOR_API_USER = env('MONITOR_API_USER')
 PROVIDERS_TIMEOUT = env('PROVIDERS_TIMEOUT')
+
+# django-smart-ratelimit:
+RATELIMIT_BACKEND = 'redis'
+RATELIMIT_REDIS = {
+    'url': env('REDIS_URL')
+}
 
 RSS_FETCHER_URL = env('RSS_FETCHER_URL')
 RSS_FETCHER_USER = env('RSS_FETCHER_USER')

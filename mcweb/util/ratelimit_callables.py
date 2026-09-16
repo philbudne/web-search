@@ -1,24 +1,24 @@
-#import logging; logger = logging.getLogger(__name__) # for debug
+import logging
 
 from django.conf import settings
 from rest_framework.authentication import SessionAuthentication
 
-def query_rate(group, request):
-    """
-    A ratelimit callable which sets a higher ratelimit if the user is staff,
-    and no limit for calls made from web UI
-    """
-    # when adding rate limit to all /api/search endpoints added this
-    # test, so web UI calls are NEVER limited, BUT a simple test for a
-    # cookie present in the request would have allowed spoofing.
-    if isinstance(request.successful_authenticator, SessionAuthentication):
-        return None             # no limit
+logger = logging.getLogger(__name__) # for debug
 
-    # check staff first to sidestep possible database access!
+def query_rate(request) -> str | None:
+    """
+    Runtime rate limit
+    """
+    # check staff first to sidestep possible additional database access for groups:
     if request.user.is_staff or request.user.groups.filter(name=settings.GROUPS.HIGH_RATE_LIMIT).exists():
         return "100/m"
-    else:
-        return "2/m"
+
+    # TEMPORARY: until api-client library no longer has hardwired 2 per minute;
+    # then can raise limit above 2/m and law abiding citizens will benefit.
+    if isinstance(request.successful_authenticator, SessionAuthentication):
+        return "3/m"
+
+    return "2/m"
 
 
 

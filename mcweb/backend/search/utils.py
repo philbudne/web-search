@@ -66,6 +66,16 @@ def pq_provider(pq: ParsedQuery, platform: Optional[str] = None) -> ContentProvi
     return get_provider(name, api_key=pq.api_key,
                         caching=pq.caching, session_id=pq.session_id)
 
+def pq_str(pq: ParsedQuery) -> str:
+    """
+    function used to access query_str,
+    in case reverting to paren wrapping needed in a hurry.
+    pq_str(pq) is shorter than _p(pq.query_str)
+
+    paren wrapping not needed since providers 4.0;
+    removed because it confusifies parser error messages!
+    """
+    return pq.query_str
 
 def _get_parse_date(params: dict[str], key: str) -> dt.datetime:
     """
@@ -407,7 +417,7 @@ def filename_timestamp() -> str:
     """
     return time.strftime("%Y%m%d%H%M%S", time.localtime())
 
-def all_content_csv_generator(pqs: list[ParsedQuery], user_id, is_staff) -> Callable[[],Generator[list, None, None]]:
+def all_content_csv_generator(pqs: list[ParsedQuery], user_id, is_staff, delay=0.0) -> Callable[[],Generator[list, None, None]]:
     """
     returns function returning generator for "total attention" CSV file
     with rows from all queries.
@@ -418,8 +428,9 @@ def all_content_csv_generator(pqs: list[ParsedQuery], user_id, is_staff) -> Call
         # phil: moved outside per-query loop (so headers appear once)
         first_page = True
         for pq in pqs:
+            QuotaHistory.quota_check(user_id, is_staff, pq.provider_name)
             provider = pq_provider(pq)
-            result = provider.all_items(f"({pq.query_str})", pq.start_date, pq.end_date, **pq.provider_props)
+            result = provider.all_items(pq_str(pq), pq.start_date, pq.end_date, **pq.provider_props)
             for page in result:
                 QuotaHistory.increment(user_id, is_staff, pq.provider_name)
                 if first_page:  # send back column names, which differ by platform
@@ -427,6 +438,8 @@ def all_content_csv_generator(pqs: list[ParsedQuery], user_id, is_staff) -> Call
                     first_page = False
                 for story in page:
                     yield [v for k, v in sorted(story.items())]
+                if delay:
+                    time.sleep(delay) # only use for background/batch!!
     return data_generator
 
 def all_content_csv_basename(pqs: list[ParsedQuery]) -> str:

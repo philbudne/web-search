@@ -13,7 +13,7 @@ from django.views.decorators.http import require_http_methods
 from util.stats import api_stats
 
 # web-search/mcweb:
-from settings import VERSION, GIT_REV
+from settings import VERSION, GIT_REV, MC_API_LIBRARY_VERSION
 
 
 @api_stats
@@ -29,5 +29,6 @@ def version(request):
         'GIT_REV': GIT_REV,
         'now': time.time(),                    # float: used by rss-fetcher
         'version': VERSION,
+        'mc-api-library-version': MC_API_LIBRARY_VERSION,
     })
     return HttpResponse(data, content_type='application/json', status=200)
