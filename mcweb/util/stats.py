@@ -81,7 +81,9 @@ def path_stats(path: str, elapsed: float, status: int) -> None:
 
     # counters are cheap (two files per name)
     if elements:
-        count(["api", "calls"] + elements, labels=[("status", status)])
+        # 2026-10-30: only report app and top level name
+        # (too many variations in sources)
+        count(["api", "calls"] + elements[:2], labels=[("status", status)])
 
     # timers are expensive (MANY disk files per name),
     # so only report by app, for successes for now
